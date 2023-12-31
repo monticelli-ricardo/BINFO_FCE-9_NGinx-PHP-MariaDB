@@ -1,8 +1,9 @@
 dbdata/
 www/exercise2/COVID-19-master/
 www/meeting1
+ignore/
 .idea
 .vscode
-.dump
-.zip
+*.dump
+*.zip
 
