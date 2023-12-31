@@ -1,0 +1,43 @@
+version: "3"
+
+services:
+  nginx:
+    build: ./nginx/
+    ports:
+        - 8080:80
+    links:
+        - php
+    volumes:
+        - ./www:/var/www/html 
+
+  php:
+    build: ./php/
+    expose:
+        - 9000
+    links:
+        - DB
+    volumes:
+        - ./www:/var/www/html 
+
+  DB:
+    image: mariadb:latest
+    ports:
+        - 3306:3306
+    volumes:
+        - ./dbdata:/var/lib/mysql
+    environment:
+        MYSQL_ROOT_PASSWORD: secret
+        MYSQL_DATABASE: webprog 
+        MYSQL_USER: webprog 
+        MYSQL_PASSWORD: webprog
+
+
+  phpmyadmin:
+    image: bitnami/phpmyadmin
+    ports:
+        - '8081:8080'
+        - '443:8443'
+    depends_on:
+        - DB
+    environment:
+        DATABASE_HOST: DB
