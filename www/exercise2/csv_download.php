@@ -1,6 +1,13 @@
 <?php
+
+// Define the file path for the token
+$tokenFilePath = '/var/www/html/exercise2/PTA.txt';
+
+// Read the token from the file
+$personalAccessToken = file_get_contents($tokenFilePath);
+
 // GitHub API authentication PTA
-define('PERSONAL_ACCESS_TOKEN','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');
+define('PERSONAL_ACCESS_TOKEN',$personalAccessToken);
 
 // CSV directory
 define('CSV_DIRECTORY', '/var/www/html/exercise2/csse_covid_19_daily_reports');
@@ -30,11 +37,24 @@ function downloadFile($url, $destination)
 // Function to get CSV file links from GitHub repository
 function getCSVFileLinks($repositoryUrl)
 {
-    // GitHub API endpoint for fetching the contents of a repository
-    $apiUrl = "https://api.github.com/repos" . parse_url($repositoryUrl, PHP_URL_PATH) . "/contents?access_token=".PERSONAL_ACCESS_TOKEN;
 
-    // Fetch the contents of the repository using GitHub API
-    $repoContents = json_decode(file_get_contents($apiUrl), true);
+    // GitHub API endpoint for fetching the contents of a repository
+    $apiUrl = "https://api.github.com/repos" . parse_url($repositoryUrl, PHP_URL_PATH) . "/contents";
+
+    // Set up the HTTP headers
+    $options = [
+        'http' => [
+            'header' => "Authorization: Bearer " . PERSONAL_ACCESS_TOKEN
+        ]
+    ];
+
+    $context = stream_context_create($options);
+
+    // Fetch the contents using file_get_contents
+    $response = file_get_contents($apiUrl, false, $context);
+
+    // Decode the response
+    $repoContents = json_decode($response);
 
     // Filter out only the CSV files
     $csvFiles = is_array($repoContents) ? array_filter($repoContents, function ($file) {
