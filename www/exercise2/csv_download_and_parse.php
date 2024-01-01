@@ -1,5 +1,8 @@
 <?php
 //-----------------------------------------------------------------------------------------------------------
+// Libraries
+    include('simple_html_dom.php'); // Include the Simple HTML DOM Parser
+//-----------------------------------------------------------------------------------------------------------  
 /// Initial Script confuguration
     //ini_set('memory_limit', '256M');  // Increasing the memory limit, Set memory limit to 256 megabytes
     ini_set('display_errors', 1);
@@ -22,6 +25,8 @@
 // list of CSV file that we are going to download from the GitHub source
     $csvFiles = [];
 
+
+
 //-----------------------------------------------------------------------------------------------------------
 // Defnining functions
 
@@ -34,8 +39,15 @@
 // Function to download a file from GitHub
     function downloadFile($url, $destination)
     {
+        // Check if the file URL ends with ".csv"
+        if (strtolower(pathinfo($url, PATHINFO_EXTENSION)) !== 'csv') {
+            // Debugging: Output a timestamped message
+            logMessage(" Skipping non-CSV file: $url <br>");
+            return;
+        }
+
         // Debugging: Output a timestamped message
-        logMessage("[" . date("Y-m-d H:i:s") . "] Downloading file: $url");
+        logMessage(" Downloading file: $url <br>");
 
         // Download the file
         $fileContent = file_get_contents($url);
@@ -43,13 +55,28 @@
         if ($fileContent !== false) {
             file_put_contents($destination, $fileContent);
             // Debugging: Output a timestamped message
-            logMessage("[" . date("Y-m-d H:i:s") . "] File downloaded successfully: $destination");
+            logMessage(" File downloaded successfully: $destination <br>");
         } else {
             // Debugging: Output a timestamped message
-            logMessage("[" . date("Y-m-d H:i:s") . "] Error downloading file: $url");
+            logMessage(" Error downloading file: $url <br>");
         }
     }
 
+// Function to get all CSV file links from GitHub Source
+    function getCSVFileLinks($url)
+    {
+        $html = file_get_html($url);
+        $csvFileLinks = [];
+
+        foreach ($html->find('a') as $link) {
+            $href = $link->href;
+            if (strpos($href, 'csv') !== false) {
+                $csvFileLinks[] = 'https://github.com' . $href . '?raw=true';
+            }
+        }
+
+        return $csvFileLinks;
+    }
 
 // Function to create a single table for all CSV files
     function createMasterTable($tableName, $columns, $pdo) {
@@ -128,34 +155,34 @@
 ////-----------------------------------------------------------------------------------------------------------
 // First step
 
-// Debugging: CSV directory
-    logMessage(" CSV Directory: " . CSV_DIRECTORY);
+    // Debugging: CSV directory
+        logMessage(" CSV Directory: " . CSV_DIRECTORY);
 
-// Download the CSV files from GitHub Source
-    $baseUrl = 'https://github.com/CSSEGISandData/COVID-19/raw/master/csse_covid_19_data/csse_covid_19_daily_reports/';
-    foreach ($csvFiles as $file) {
-        // Check if the file has a CSV extension
-        if (pathinfo($file, PATHINFO_EXTENSION) === 'csv') {
-            $url = $baseUrl . basename($file);
-            $destination = CSV_DIRECTORY . '/' . basename($file);
+    // Download the CSV files from GitHub Source
+        $baseUrl = 'https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_daily_reports';
+    // Get CSV file links
+        $csvFileLinks = getCSVFileLinks($baseUrl);
 
+    // Directory to save CSV files
+        $csvDirectory = '/path/to/save/csv/files';
+
+    // Download each CSV file
+        foreach ($csvFileLinks as $csvFileLink) {
+            $csvFileName = basename($csvFileLink);
+            $destination = $csvDirectory . '/' . $csvFileName;
+            
             // Download the file
-            downloadFile($url, $destination);
-        }
+            downloadFile($csvFileLink, $destination);
 
-        // Debugging: Output a timestamped message
-        if (file_exists($destination)) {
-            logMessage("File downloaded successfully: $destination<br>");
-        } else {
-            logMessage("Error downloading file: $url<br>");
+        // Output a message
+        logMessage( "File downloaded: $csvFileName\n");
         }
-    }
 
     // Update the list of flies, Get all CSV files downloaded in the local directory
-    $csvFiles = glob(CSV_DIRECTORY . '/*.csv');
+        $csvFiles = glob(CSV_DIRECTORY . '/*.csv');
 
     // Debugging: Output the count of CSV files available locally
-    logMessage(" Found " . count($csvFiles) . " CSV files:");
+        logMessage(" Found " . count($csvFiles) . " CSV files:");
 
 // Valide each downloaded file for further processing
 
