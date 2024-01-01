@@ -6,20 +6,24 @@
     ini_set('display_startup_errors', 1);
     error_reporting(E_ALL);
 //-----------------------------------------------------------------------------------------------------------
+// Defining Variables
 // Database connection details
     $database_host = 'DB';
     $database_user = 'webprog';
     $database_password = 'webprog';
     $database_name = 'webprog';
-//-----------------------------------------------------------------------------------------------------------
+
 // CSV directory
     define('CSV_DIRECTORY', '/var/www/html/exercise2/csse_covid_19_daily_reports');
 
 // Table name constant
     define('TABLE_NAME', 'master_table');
 
-//-----------------------------------------------------------------------------------------------------------
+// list of CSV file that we are going to download from the GitHub source
+    $csvFiles = [];
 
+//-----------------------------------------------------------------------------------------------------------
+// Defnining functions
 
 // Debugging fuction, Output a timestamped message with a newline
     function logMessage($message) {
@@ -28,23 +32,23 @@
     }
 
 // Function to download a file from GitHub
-function downloadFile($url, $destination)
-{
-    // Debugging: Output a timestamped message
-    logMessage("[" . date("Y-m-d H:i:s") . "] Downloading file: $url");
-
-    // Download the file
-    $fileContent = file_get_contents($url);
-
-    if ($fileContent !== false) {
-        file_put_contents($destination, $fileContent);
+    function downloadFile($url, $destination)
+    {
         // Debugging: Output a timestamped message
-        logMessage("[" . date("Y-m-d H:i:s") . "] File downloaded successfully: $destination");
-    } else {
-        // Debugging: Output a timestamped message
-        logMessage("[" . date("Y-m-d H:i:s") . "] Error downloading file: $url");
+        logMessage("[" . date("Y-m-d H:i:s") . "] Downloading file: $url");
+
+        // Download the file
+        $fileContent = file_get_contents($url);
+
+        if ($fileContent !== false) {
+            file_put_contents($destination, $fileContent);
+            // Debugging: Output a timestamped message
+            logMessage("[" . date("Y-m-d H:i:s") . "] File downloaded successfully: $destination");
+        } else {
+            // Debugging: Output a timestamped message
+            logMessage("[" . date("Y-m-d H:i:s") . "] Error downloading file: $url");
+        }
     }
-}
 
 
 // Function to create a single table for all CSV files
@@ -121,68 +125,23 @@ function downloadFile($url, $destination)
                 return $value;
         }
     }
-
-//
-// Check the connection to the database
-    try {
-        // Connect to the database
-        $pdo = new PDO("mysql:host=$database_host;dbname=$database_name", $database_user, $database_password);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        // Test the database connection
-        $stmt = $pdo->query('SELECT "Database connection test successful."');
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        // Debugging: Output a timestamped message
-        logMessage( " Database connection test successful.<br>");
-    } catch (PDOException $e) {
-        die("Connection failed: " . $e->getMessage());
-    }
-//------------------------------------------------------------------------------------------------------------
+////-----------------------------------------------------------------------------------------------------------
+// First step
 
 // Debugging: CSV directory
     logMessage(" CSV Directory: " . CSV_DIRECTORY);
 
-// Get all CSV files in the directory
-    $csvFiles = glob(CSV_DIRECTORY . '/*.csv');
-
-// Debugging: Output the list of CSV files
-    logMessage(" Found " . count($csvFiles) . " CSV files:");
-    // foreach ($csvFiles as $file) {
-    //     logMessage($file);
-    // }
-//-----------------------------------------------------------------------------------------------------------
-// Grant all privileges to the webprog user on the DB we are creating
-    try {
-        // Connect to the database as the root user
-        $root_pdo = new PDO("mysql:host=$database_host;dbname=mysql", 'root', 'secret');
-        $root_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        // Grant all privileges to the webprog user
-        $grantQuery = "GRANT ALL PRIVILEGES ON mas.* TO '$database_user'@'%'";
-        $root_pdo->exec($grantQuery);
-
-        // Flush privileges
-        $flushQuery = "FLUSH PRIVILEGES";
-        $root_pdo->exec($flushQuery);
-
-        // Debugging: Output a timestamped message
-        logMessage(" Privileges granted to user '$database_user'.<br>");
-    } catch (PDOException $e) {
-        // Handle connection errors
-        die("Connection failed: " . $e->getMessage());
-    }
-
-
-////-----------------------------------------------------------------------------------------------------------
 // Download the CSV files from GitHub Source
     $baseUrl = 'https://github.com/CSSEGISandData/COVID-19/raw/master/csse_covid_19_data/csse_covid_19_daily_reports/';
     foreach ($csvFiles as $file) {
-        $url = $baseUrl . basename($file);
-        $destination = CSV_DIRECTORY . '/' . basename($file);
+        // Check if the file has a CSV extension
+        if (pathinfo($file, PATHINFO_EXTENSION) === 'csv') {
+            $url = $baseUrl . basename($file);
+            $destination = CSV_DIRECTORY . '/' . basename($file);
 
-        // Download the file
-        downloadFile($url, $destination);
+            // Download the file
+            downloadFile($url, $destination);
+        }
 
         // Debugging: Output a timestamped message
         if (file_exists($destination)) {
@@ -192,7 +151,14 @@ function downloadFile($url, $destination)
         }
     }
 
-// Take each downloaded file for further processing
+    // Update the list of flies, Get all CSV files downloaded in the local directory
+    $csvFiles = glob(CSV_DIRECTORY . '/*.csv');
+
+    // Debugging: Output the count of CSV files available locally
+    logMessage(" Found " . count($csvFiles) . " CSV files:");
+
+// Valide each downloaded file for further processing
+
     foreach ($csvFiles as $csvFile) {
         if (file_exists($csvFile)) {
             // Debugging: Output a timestamped message if the file exists
@@ -214,8 +180,47 @@ function downloadFile($url, $destination)
         }
    }
 
-// ////-----------------------------------------------------------------------------------------------------------
-// // Inject the CSV data intho the DB
+////-----------------------------------------------------------------------------------------------------------
+// Second step
+
+// Check the connection to the database to ensure we can proceed witht the next steps
+try {
+    // Connect to the database
+    $pdo = new PDO("mysql:host=$database_host;dbname=$database_name", $database_user, $database_password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Test the database connection
+    $stmt = $pdo->query('SELECT "Database connection test successful."');
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // Debugging: Output a timestamped message
+    logMessage( " Database connection test successful.<br>");
+} catch (PDOException $e) {
+    die("Connection failed: " . $e->getMessage());
+}
+
+// Grant all privileges to the webprog user on the DB we are creating
+    try {
+        // Connect to the database as the root user
+        $root_pdo = new PDO("mysql:host=$database_host;dbname=mysql", 'root', 'secret');
+        $root_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Grant all privileges to the webprog user
+        $grantQuery = "GRANT ALL PRIVILEGES ON mas.* TO '$database_user'@'%'";
+        $root_pdo->exec($grantQuery);
+
+        // Flush privileges
+        $flushQuery = "FLUSH PRIVILEGES";
+        $root_pdo->exec($flushQuery);
+
+        // Debugging: Output a timestamped message
+        logMessage(" Privileges granted to user '$database_user'.<br>");
+    } catch (PDOException $e) {
+        // Handle connection errors
+        die("Connection failed: " . $e->getMessage());
+    }
+
+// Inject the CSV data intho the DB we just created
 //     try {
 //         // Disable Foreign Key Checks and Unique Constraints
 //         $pdo->exec('SET @@session.unique_checks = 0');
