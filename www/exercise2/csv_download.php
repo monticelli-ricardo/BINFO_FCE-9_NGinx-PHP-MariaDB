@@ -37,14 +37,13 @@ function downloadFile($url, $destination)
 // Function to get CSV file links from GitHub repository
 function getCSVFileLinks($repositoryUrl)
 {
-
     // GitHub API endpoint for fetching the contents of a repository
     $apiUrl = "https://api.github.com/repos" . parse_url($repositoryUrl, PHP_URL_PATH) . "/contents";
 
-    // Set up the HTTP headers
+    // Set up the HTTP headers including Authorization header
     $options = [
         'http' => [
-            'header' => "Authorization: Bearer " . PERSONAL_ACCESS_TOKEN
+            'header' => "Authorization: token " . PERSONAL_ACCESS_TOKEN
         ]
     ];
 
@@ -52,6 +51,16 @@ function getCSVFileLinks($repositoryUrl)
 
     // Fetch the contents using file_get_contents
     $response = file_get_contents($apiUrl, false, $context);
+
+    // Check the rate limit headers
+    $rateLimitLimit = isset($http_response_header['X-RateLimit-Limit']) ? $http_response_header['X-RateLimit-Limit'] : 0;
+    $rateLimitRemaining = isset($http_response_header['X-RateLimit-Remaining']) ? $http_response_header['X-RateLimit-Remaining'] : 0;
+    $rateLimitReset = isset($http_response_header['X-RateLimit-Reset']) ? $http_response_header['X-RateLimit-Reset'] : 0;
+
+    // Output the rate limit information
+    echo "Rate Limit: $rateLimitLimit\n";
+    echo "Remaining Requests: $rateLimitRemaining\n";
+    echo "Reset Time: " . date('Y-m-d H:i:s', $rateLimitReset) . " UTC\n";
 
     // Decode the response
     $repoContents = json_decode($response);
@@ -65,6 +74,7 @@ function getCSVFileLinks($repositoryUrl)
     return array_map(function ($file) {
         return $file['download_url'];
     }, $csvFiles);
+
 }
 
 // Get CSV file links from GitHub
