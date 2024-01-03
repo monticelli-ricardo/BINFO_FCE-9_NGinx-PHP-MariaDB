@@ -36,6 +36,7 @@
 // Debugging fuction, Output a timestamped message with a newline
     function logMessage($message) {
         echo "[" . date("Y-m-d H:i:s") . "] " . $message . " <br>";
+        global $logFile;
         file_put_contents($logFile, "[" . date("Y-m-d H:i:s") . "] " . $message . "\n", FILE_APPEND);
     }
 
