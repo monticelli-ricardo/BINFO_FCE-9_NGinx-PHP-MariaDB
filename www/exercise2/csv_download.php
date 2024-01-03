@@ -8,12 +8,14 @@ ini_set('memory_limit', '1G');
 
 //-----------------------------------------------------------------------------------------------------------
 // Define constants
-define('CSV_DIRECTORY', '/var/www/html/exercise2/csse_covid_19_daily_reports');
+define('CSV_DIRECTORY', '/shared_files');
 define('TEMP_DIRECTORY', '/var/www/html/exercise2/temp');
 
 // Debugging: Output a timestamped message with a newline
 function logMessage($message) {
     echo "[" . date("Y-m-d H:i:s") . "] " . $message . " <br>";
+    global $logFile;
+    file_put_contents($logFile, "[" . date("Y-m-d H:i:s") . "] " . $message . "\n", FILE_APPEND);
 }
 
 // Function to download a file from GitHub
@@ -55,6 +57,7 @@ function downloadFile($url, $destination)
 
         return true;
     }
+
 // Function to delete a directory content
     function deleteDirectory($dir) {
         if (!file_exists($dir)) {
@@ -107,7 +110,7 @@ function downloadFile($url, $destination)
     if (!file_exists(TEMP_DIRECTORY)) {
         mkdir(TEMP_DIRECTORY, 0755, true);
         // Debugging: Output a timestamped message
-        logMessage(" Temporary directory created: " . TEMP_DIRECTORY);
+        logMessage(" Temporary directory created: " . TEMP_DIRECTORY. "\n");
     }
 
 // Step 2: Download the master repository as a ZIP file
