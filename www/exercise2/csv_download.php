@@ -142,10 +142,10 @@ function downloadFile($url, $destination)
         $destinationFile = $destinationPath . '/' . basename($csvFile);
         copy($csvFile, $destinationFile);
         // Debugging: Output a timestamped message
-        logMessage("Copied CSV file: [$csvFile] into working directory. \n");
+        logMessage("Copied CSV file: [$csvFile] into the working directory. \n");
     }
     copy($zipFile, $destinationFile);
-    logMessage("Copied Master file: [$zipFile] into working directory. \n");
+    logMessage("Copied Master file: [$zipFile] into the working directory. \n");
 
 // Step 5: Clean up the temp files except the Master zip file
     // Empty the directory
