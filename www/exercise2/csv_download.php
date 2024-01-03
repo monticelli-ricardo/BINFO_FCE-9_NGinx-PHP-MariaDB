@@ -1,25 +1,26 @@
 <?php
+//-----------------------------------------------------------------------------------------------------------
+// Initial Script configuration
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+ini_set('memory_limit', '256M'); 
 
-// Define the file path for the token
-$tokenFilePath = '/var/www/html/exercise2/PTA.txt';
-
-// Read the token from the file
-$personalAccessToken = file_get_contents($tokenFilePath);
-
-// GitHub API authentication PTA
-define('PERSONAL_ACCESS_TOKEN',$personalAccessToken);
-
-// CSV directory
+//-----------------------------------------------------------------------------------------------------------
+// Define constants
 define('CSV_DIRECTORY', '/var/www/html/exercise2/csse_covid_19_daily_reports');
+define('TEMP_DIRECTORY', '/var/www/html/exercise2/temp');
 
-// GitHub repository URL
-$githubRepositoryUrl = 'https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_daily_reports';
+// Debugging: Output a timestamped message with a newline
+function logMessage($message) {
+    echo "[" . date("Y-m-d H:i:s") . "] " . $message . " <br>";
+}
 
 // Function to download a file from GitHub
 function downloadFile($url, $destination)
 {
     // Debugging: Output a timestamped message
-    logMessage(" Downloading file: $url <br>");
+    logMessage(" Downloading file: $url");
 
     // Download the file
     $fileContent = file_get_contents($url);
@@ -27,65 +28,71 @@ function downloadFile($url, $destination)
     if ($fileContent !== false) {
         file_put_contents($destination, $fileContent);
         // Debugging: Output a timestamped message
-        logMessage(" File downloaded successfully: $destination <br>");
+        logMessage(" File downloaded successfully: $destination");
     } else {
         // Debugging: Output a timestamped message
-        logMessage(" Error downloading file: $url <br>");
+        logMessage(" Error downloading file: $url");
     }
 }
 
-// Function to get CSV file links from GitHub repository
-function getCSVFileLinks($repositoryUrl)
-{
-    // GitHub API endpoint for fetching the contents of a repository
-    $apiUrl = "https://api.github.com/repos" . parse_url($repositoryUrl, PHP_URL_PATH) . "/contents";
-
-    // Set up the HTTP headers including Authorization header
-    $options = [
-        'http' => [
-            'header' => "Authorization: token " . PERSONAL_ACCESS_TOKEN
-        ]
-    ];
-
-    $context = stream_context_create($options);
-
-    // Fetch the contents using file_get_contents
-    $response = file_get_contents($apiUrl, false, $context);
-
-    // Check the rate limit headers
-    $rateLimitLimit = isset($http_response_header['X-RateLimit-Limit']) ? $http_response_header['X-RateLimit-Limit'] : 0;
-    $rateLimitRemaining = isset($http_response_header['X-RateLimit-Remaining']) ? $http_response_header['X-RateLimit-Remaining'] : 0;
-    $rateLimitReset = isset($http_response_header['X-RateLimit-Reset']) ? $http_response_header['X-RateLimit-Reset'] : 0;
-
-    // Output the rate limit information
-    echo "Rate Limit: $rateLimitLimit\n";
-    echo "Remaining Requests: $rateLimitRemaining\n";
-    echo "Reset Time: " . date('Y-m-d H:i:s', $rateLimitReset) . " UTC\n";
-
-    // Decode the response
-    $repoContents = json_decode($response);
-
-    // Filter out only the CSV files
-    $csvFiles = is_array($repoContents) ? array_filter($repoContents, function ($file) {
-        return pathinfo($file['name'], PATHINFO_EXTENSION) === 'csv';
-    }) : [];
-
-    // Return an array of CSV file download links
-    return array_map(function ($file) {
-        return $file['download_url'];
-    }, $csvFiles);
-
+//-----------------------------------------------------------------------------------------------------------
+// Step 1: Create the temporary directory if it doesn't exist
+if (!file_exists(TEMP_DIRECTORY)) {
+    mkdir(TEMP_DIRECTORY, 0755, true);
+    // Debugging: Output a timestamped message
+    logMessage(" Temporary directory created: " . TEMP_DIRECTORY);
 }
 
-// Get CSV file links from GitHub
-$csvFileLinks = getCSVFileLinks($githubRepositoryUrl);
+// Step 2: Download the master repository as a ZIP file
+$repoUrl = 'https://github.com/CSSEGISandData/COVID-19/archive/master.zip';
+$zipFile = TEMP_DIRECTORY . '/master.zip';
+downloadFile($repoUrl, $zipFile);
 
-// Download the CSV files
-foreach ($csvFileLinks as $link) {
-    $destination = CSV_DIRECTORY . '/' . basename($link);
-
-    // Download the file
-    downloadFile($link, $destination);
+// Step 3: Unzip the master file
+$zip = new ZipArchive;
+if ($zip->open($zipFile) === TRUE) {
+    $zip->extractTo(TEMP_DIRECTORY);
+    $zip->close();
+    // Debugging: Output a timestamped message
+    logMessage(" Master repository extracted successfully.");
+} else {
+    // Debugging: Output a timestamped message
+    logMessage(" Failed to extract master repository.");
 }
 
+// Step 4: Copy CSV files to a separate folder
+$sourcePath = TEMP_DIRECTORY . '/COVID-19-master/csse_covid_19_data/csse_covid_19_daily_reports/';
+$destinationPath = CSV_DIRECTORY;
+
+// Create the destination directory if it doesn't exist
+if (!file_exists($destinationPath)) {
+    mkdir($destinationPath, 0755, true);
+}
+
+// Copy CSV files
+$csvFiles = glob($sourcePath . '*.csv');
+foreach ($csvFiles as $csvFile) {
+    $destinationFile = $destinationPath . '/' . basename($csvFile);
+    copy($csvFile, $destinationFile);
+    // Debugging: Output a timestamped message
+    logMessage(" Copied CSV file: $destinationFile");
+}
+
+// Step 5: Clean up the remaining files
+// Remove the downloaded ZIP file
+unlink($zipFile);
+
+// Remove the remaining extracted files
+$remainingFiles = glob(TEMP_DIRECTORY . '/*');
+foreach ($remainingFiles as $file) {
+    unlink($file);
+}
+
+// Remove the empty directory
+rmdir(TEMP_DIRECTORY);
+
+// Debugging: Output a timestamped message
+logMessage(" Clean-up completed.");
+
+//-----------------------------------------------------------------------------------------------------------
 ?>
