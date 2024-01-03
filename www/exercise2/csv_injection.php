@@ -20,10 +20,10 @@
         $database_name = 'webprog';
 
     // CSV directory
-        define('CSV_DIRECTORY', '/var/www/html/exercise2/csse_covid_19_daily_reports');
+        define('CSV_DIRECTORY', '/shared_files');
 
     // Table name constant
-        define('TABLE_NAME', 'master_table');
+        define('TABLE_NAME', 'master_csv_table');
 
     // list of CSV file that we are going to download from the GitHub source
         $csvFiles = [];
@@ -41,14 +41,14 @@
     }
 
 // Function to create a single table for all CSV files
-    function createMasterTable($tableName, $columns, $pdo) {
-
+    function createMasterTable($tableName, $columns, $pdo)
+    {
         $query = "CREATE TABLE IF NOT EXISTS $tableName (id INT PRIMARY KEY AUTO_INCREMENT, ";
 
         // Add columns to the query with inferred data types
         foreach ($columns as $column) {
             $dataType = inferDataType($column);  // Function to infer data type
-            $query .= "$column $dataType, ";
+            $query .= "`$column` $dataType, ";  // Use backticks for column names
         }
 
         $query = rtrim($query, ", ") . ")";
@@ -61,11 +61,10 @@
 
         try {
             $stmt->execute();
-            logMessage( " Table $tableName created successfully.\n");
+            logMessage("Table $tableName created successfully.\n");
         } catch (PDOException $e) {
             logMessage("Error creating table 'covid_data': " . $e->getMessage() . "\n");
         }
-        
     }
 
 // Function to infer data type based on column name and example:
@@ -118,20 +117,95 @@
         }
     }
 
+    // Function to check if a column exists in the database table
+        function columnExistsInTable($columnName, $pdo)
+        {
+            $tableName = TABLE_NAME;
+
+            // Use a query to check if the column exists in the information_schema
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as count
+                FROM information_schema.columns
+                WHERE table_name = :tableName
+                AND column_name = :columnName
+            ");
+
+            $stmt->bindParam(':tableName', $tableName, PDO::PARAM_STR);
+            $stmt->bindParam(':columnName', $columnName, PDO::PARAM_STR);
+
+            $stmt->execute();
+
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            return $result['count'] > 0;
+        }
+
+// Function to delete a directory content
+    function deleteDirectoryContents($dir) {
+        if (!file_exists($dir) || !is_dir($dir)) {
+            return false;
+        }
+
+        $files = array_diff(scandir($dir), array('.', '..'));
+
+        foreach ($files as $file) {
+            $path = $dir . DIRECTORY_SEPARATOR . $file;
+
+            if (is_dir($path)) {
+                deleteDirectoryContents($path);
+            } else {
+                unlink($path);
+            }
+        }
+
+        return true;
+    }
+
+// Function to move the files between Docker compose volumes
+    function moveFiles($sourceDirectory, $destinationDirectory) {
+        try{
+            // Create the destination directory if it doesn't exist
+            if (!file_exists($destinationDirectory)) {
+                mkdir($destinationDirectory, 0777, true);
+            } else { 
+                // lets make sure it is empty and clean
+                deleteDirectoryContents($destinationDirectory);
+                
+                // Get all CSV files in the source directory
+                $csvFiles = glob($sourceDirectory . '/*.csv');
+            
+                // Move each CSV file to the destination directory
+                foreach ($csvFiles as $csvFile) {
+                    $destinationFile = $destinationDirectory . '/' . basename($csvFile);
+                    
+                    // Use shell command to move the file
+                    $command = "mv $csvFile $destinationFile";
+                    exec($command);
+            
+                    // Debugging: Output a timestamped message
+                    logMessage(" File moved: basename($csvFile) to $destinationDirectory\n");
+                }
+            }
+        } catch (Exception $e) {
+            // Handle exceptions
+            logMessage("Error moving CSV files: " . $e->getMessage() . "\n");
+        }
+    }
+
 ////-----------------------------------------------------------------------------------------------------------
-// Step 1: Validate the CSV files that we are going to process
+// Step 1: Validate the CSV files that we are going to process  
 
-    // Debugging: CSV directory
-        logMessage("COVID-19 reports CSV Local directory: " . CSV_DIRECTORY . "\n");
-
-    // Directory to save CSV files
+    // Directory source of the local CSV files
         $csvDirectory = CSV_DIRECTORY;
-
+        logMessage("COVID-19 reports CSV source directory: $csvDirectory\n");
+    // Cache for storing CSV data
+        $cachedData = [];
+    
     // Update the list of flies, Get all CSV files downloaded in the local directory
-        $csvFiles = glob(CSV_DIRECTORY . '/*.csv');
+        $csvFiles = glob($csvDirectory . '/*.csv');
 
     // Debugging: Output the count of CSV files available locally
-        logMessage(" Found " . count($csvFiles) . " CSV files:");
+        logMessage(" Found " . count($csvFiles) . " CSV files:\n");
 
     // // Valide each CSV file for further processing
     //     foreach ($csvFiles as $csvFile) {
@@ -155,6 +229,24 @@
     //         }
     //      }
 
+    // Populate the cachedData array with CSV file content
+        $cachedData = [];
+        foreach ($csvFiles as $csvFile) {
+            $fileName = basename($csvFile);
+            $fileContent = file_get_contents($csvFile);
+
+            // Check if file content retrieval is successful
+            if ($fileContent !== false) {
+                // Add file content to the cachedData array
+                $cachedData[$fileName] = $fileContent;
+                // Debugging: Output a timestamped message
+                logMessage(" File content loaded for $fileName.\n");
+            } else {
+                // Debugging: Output an error message if unable to read the file
+                logMessage("Error reading the file: $csvFile \n");
+            }
+        }
+
 ////-----------------------------------------------------------------------------------------------------------
 // Step 2: Check the connection to the database to ensure that we can proceed with the next steps
     try {
@@ -163,11 +255,9 @@
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Test the database connection
-        $stmt = $pdo->query('SELECT "Database connection test successful."');
+        $stmt = $pdo->query('SELECT "Database connection test successful.\n"');
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Debugging: Output a timestamped message
-        logMessage( " Database connection test successful.\n");
     } catch (PDOException $e) {
         die("Connection failed: " . $e->getMessage());
     }
@@ -196,76 +286,82 @@
         logMessage("Error: " . $e->getMessage() . "\n");
     }
 ////-----------------------------------------------------------------------------------------------------------
-// Step 3: Inject the CSV data intho the DB we just created
-    try {
-        // Disable Foreign Key Checks and Unique Constraints
-        $pdo->exec('SET @@session.unique_checks = 0');
-        $pdo->exec('SET @@session.foreign_key_checks = 0');
+// Step 3: Inject the CSV data in a MariaDB table
+        try {
+                $pdo->beginTransaction();
+            // Disable Foreign Key Checks and Unique Constraints
+                $pdo->exec('SET @@session.unique_checks = 0');
+                $pdo->exec('SET @@session.foreign_key_checks = 0');
 
-        // Start measuring execution time
-        $startTime = microtime(true);
-        // // Enable query profiling
-        // $pdo->exec('SET profiling = 1');
+            // Start measuring execution time
+                $startTime = microtime(true);
 
-        // Read the first CSV file to get column names
-        $firstCsvFile = reset($csvFiles);
+            // Read the first CSV file to get column names
+                $firstCsvFile = reset($csvFiles);
+                $handle = fopen($firstCsvFile, 'r');
+                $columns = fgetcsv($handle);
+                fclose($handle);
 
-        $handle = fopen($firstCsvFile, 'r');
-        $columns = fgetcsv($handle);
-        fclose($handle);
+            // Create the master table
+                createMasterTable(TABLE_NAME, $columns, $pdo);
 
-        // Create the master table
-        createMasterTable("master_table", $columns, $pdo);
+            // Assuming $cachedData is an associative array where keys are file names and values are file contents
+            // Loop through each CSV file
+            foreach ($cachedData as $fileName => $fileContent) {
+                // Get the column names from the first line of the file
+                $handle = fopen("data://text/plain;base64," . base64_encode($fileContent), 'r');
+                $csvColumns = fgetcsv($handle);
+                fclose($handle);
 
-        // Perform bulk insertion or other operations
+                // Generate the LOAD DATA INFILE query with dynamic columns
+                $query = "LOAD DATA INFILE '$fileName' INTO TABLE " . TABLE_NAME .
+                        " FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\n' IGNORE 1 ROWS" .
+                        " (";
 
-            // Read and insert data from all CSV files, skipping the first row (column names)
-                foreach ($csvFiles as $csvFile) {
-                    $handle = fopen($csvFile, 'r');
-                    
-                    // Skip the first row (column names)
-                    fgetcsv($handle);
+                // Prepare an array to store columns to insert
+                $columnsToInsert = [];
 
-                    $query = "LOAD DATA INFILE '$csvFile' INTO TABLE master_table
-                    FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
-                    LINES TERMINATED BY '\n' IGNORE 1 ROWS";
-
-                    $stmt = $pdo->prepare($query);
-                    $stmt->execute();
-                    
-                    fclose($handle);
+                // Loop through CSV columns
+                foreach ($csvColumns as $csvColumn) {
+                    // Check if the column exists in the database table
+                    if (columnExistsInTable($csvColumn, $pdo)) {
+                        $columnsToInsert[] = $csvColumn;
+                    } else {
+                        logMessage("Column '$csvColumn' does not exist in the database table. Skipping.\n");
+                    }
                 }
 
-                // Remove the trailing comma and execute the bulk insert
-                $query = rtrim($query, ", ");
+                // Add the columns to the query
+                $query .= implode(', ', $columnsToInsert) . ")";
+
+                // Prepare and execute the query
                 $stmt = $pdo->prepare($query);
-                $stmt->execute($queryParams);
+                if($stmt->execute()){
+                    $pdo->commit();
+                    logMessage("Data from $fileName inserted into " . TABLE_NAME . " successfully.\n");
+                } else {
+                    $pdo->rollBack();
+                    logMessage("Data from $fileName was NOT inserted into " . TABLE_NAME . " successfully.\n");
+                }
 
+                
+            }
 
-        // Re-enable Foreign Key Checks and Unique Constraints
-            $pdo->exec('SET @@session.unique_checks = 1');
-            $pdo->exec('SET @@session.foreign_key_checks = 1');
+            
 
-        // Calculate execution time v1
-            $endTime = microtime(true);
-            $executionTime = $endTime - $startTime;
-            // Debugging: Output a timestamped message
-            logMessage( "Data inserted into master_table successfully.\n");
-            logMessage( "Script executed in $executionTime seconds.\n");
-            // // Calculate execution time v2
-            // $stmt = $pdo->query('SHOW PROFILES');
-            // while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            //     logMessage("Query ID: {$row['Query_ID']}, Duration: {$row['Duration']} seconds");
-            // }
+            // Re-enable Foreign Key Checks and Unique Constraints
+                $pdo->exec('SET @@session.unique_checks = 1');
+                $pdo->exec('SET @@session.foreign_key_checks = 1');
 
-        logMessage( "Bulk insertion completed successfully.\n");
+                //logMessage("Bulk insertion completed successfully.\n");
 
-    } catch (PDOException $e) {
-        // Handle exceptions, rollback transactions, or take appropriate action
-        echo "Error: " . $e->getMessage();
-    }
+        } catch (PDOException $e) {
+            die("Error: " . $e->getMessage());
+        }
 
-// Close the database connection
+// Close the database connections
+    $root_pdo = null;
     $pdo = null;
+
 
 ?>
