@@ -94,7 +94,11 @@ function downloadFile($url, $destination)
             logMessage("Directory:[ " . CSV_DIRECTORY . " ] contents deleted successfully.\n");
             logMessage("Clean up complete.\n");
         } else {
-            logMessage("Failed to delete the directory contents.\n");
+            logMessage("Failed to delete the directory contents.\n The working directory  [ " . CSV_DIRECTORY . " ] does not exist.\n");
+                mkdir(CSV_DIRECTORY, 0755, true);
+                // Debugging: Output a timestamped message
+                logMessage(" Working directory created: [" . CSV_DIRECTORY . " ]\n");
+            
         }
     }
 
