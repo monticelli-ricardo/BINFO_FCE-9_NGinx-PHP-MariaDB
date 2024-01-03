@@ -100,7 +100,7 @@ function deleteDirectoryContents($dir) {
         mkdir($destinationPath, 0755, true);
     }
 
-// Copy CSV files
+// Copy CSV files and the Master file
     $csvFiles = glob($sourcePath . '*.csv');
     foreach ($csvFiles as $csvFile) {
         $destinationFile = $destinationPath . '/' . basename($csvFile);
@@ -108,6 +108,7 @@ function deleteDirectoryContents($dir) {
         // Debugging: Output a timestamped message
         logMessage("Copied CSV file: $destinationFile \n");
     }
+    copy($zipFile, $destinationFile)
 
 // Step 5: Clean up the temp files except the Master zip file
     // Empty the directory
