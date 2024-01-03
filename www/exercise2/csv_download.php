@@ -108,7 +108,7 @@ function deleteDirectoryContents($dir) {
         // Debugging: Output a timestamped message
         logMessage("Copied CSV file: $destinationFile \n");
     }
-    copy($zipFile, $destinationFile)
+    copy($zipFile, $destinationFile);
 
 // Step 5: Clean up the temp files except the Master zip file
     // Empty the directory
