@@ -164,7 +164,7 @@
         $csvFileLinks = getCSVFileLinks($baseUrl);
 
     // Directory to save CSV files
-        $csvDirectory = '/path/to/save/csv/files';
+        $csvDirectory = CSV_DIRECTORY;
 
     // Download each CSV file
         foreach ($csvFileLinks as $csvFileLink) {
