@@ -10,20 +10,23 @@
     error_reporting(E_ALL);
 //-----------------------------------------------------------------------------------------------------------
 // Defining Variables
-// Database connection details
-    $database_host = 'DB';
-    $database_user = 'webprog';
-    $database_password = 'webprog';
-    $database_name = 'webprog';
+    // Log file for debugging
+        $logFile = '/var/www/html/exercise2/logFile.log';
 
-// CSV directory
-    define('CSV_DIRECTORY', '/var/www/html/exercise2/csse_covid_19_daily_reports');
+    // Database connection details
+        $database_host = 'DB';
+        $database_user = 'webprog';
+        $database_password = 'webprog';
+        $database_name = 'webprog';
 
-// Table name constant
-    define('TABLE_NAME', 'master_table');
+    // CSV directory
+        define('CSV_DIRECTORY', '/var/www/html/exercise2/csse_covid_19_daily_reports');
 
-// list of CSV file that we are going to download from the GitHub source
-    $csvFiles = [];
+    // Table name constant
+        define('TABLE_NAME', 'master_table');
+
+    // list of CSV file that we are going to download from the GitHub source
+        $csvFiles = [];
 
 
 
@@ -33,7 +36,7 @@
 // Debugging fuction, Output a timestamped message with a newline
     function logMessage($message) {
         echo "[" . date("Y-m-d H:i:s") . "] " . $message . " <br>";
-    //file_put_contents('logfile.txt', "[" . date("Y-m-d H:i:s") . "] " . $message . "\n", FILE_APPEND);
+        file_put_contents($logFile, "[" . date("Y-m-d H:i:s") . "] " . $message . "\n", FILE_APPEND);
     }
 
 // Function to download a file from GitHub
@@ -97,10 +100,13 @@
         // Debugging: Output the SQL statement
         logMessage("SQL Statement: $query");
 
-        $stmt->execute();
-
-        // Debugging: Output a timestamped message
-        logMessage( " Table $tableName created successfully.<br>");
+        try {
+            $stmt->execute();
+            logMessage( " Table $tableName created successfully.<br>");
+        } catch (PDOException $e) {
+            logMessage("Error creating table 'covid_data': " . $e->getMessage());
+        }
+        
     }
 
 // Function to infer data type based on column name and example:
@@ -152,11 +158,12 @@
                 return $value;
         }
     }
+
 ////-----------------------------------------------------------------------------------------------------------
 // First step
 
     // Debugging: CSV directory
-        logMessage(" CSV Directory: " . CSV_DIRECTORY);
+        logMessage(" COVID-19 reports CSV Local directory: " . CSV_DIRECTORY);
 
     // Download the CSV files from GitHub Source
         $baseUrl = 'https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_daily_reports';
@@ -174,8 +181,8 @@
             // Download the file
             downloadFile($csvFileLink, $destination);
 
-        // Output a message
-        logMessage( "File downloaded: $csvFileName\n");
+            // Output a message
+            logMessage( "File downloaded: $csvFileName\n");
         }
 
     // Update the list of flies, Get all CSV files downloaded in the local directory
