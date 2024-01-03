@@ -20,52 +20,84 @@ function logMessage($message) {
 function downloadFile($url, $destination)
 {
     // Debugging: Output a timestamped message
-    logMessage(" Downloading file: $url");
+    logMessage(" Downloading file: $url\n");
 
-    // Download the file
+    // Download the master file
     $fileContent = file_get_contents($url);
 
     if ($fileContent !== false) {
         file_put_contents($destination, $fileContent);
         // Debugging: Output a timestamped message
-        logMessage(" File downloaded successfully: $destination");
+        logMessage(" File downloaded successfully: $destination\n");
     } else {
         // Debugging: Output a timestamped message
         logMessage(" Error downloading file: $url\n");
     }
 }
 
-// Function to deletea a directory content
-function deleteDirectoryContents($dir) {
-    if (!file_exists($dir) || !is_dir($dir)) {
-        return false;
-    }
-
-    $files = array_diff(scandir($dir), array('.', '..'));
-
-    foreach ($files as $file) {
-        $path = $dir . DIRECTORY_SEPARATOR . $file;
-
-        if (is_dir($path)) {
-            deleteDirectoryContents($path);
-        } else {
-            unlink($path);
+// Function to delete a directory content
+    function deleteDirectoryContents($dir) {
+        if (!file_exists($dir) || !is_dir($dir)) {
+            return false;
         }
-    }
 
-    return true;
-}
+        $files = array_diff(scandir($dir), array('.', '..'));
+
+        foreach ($files as $file) {
+            $path = $dir . DIRECTORY_SEPARATOR . $file;
+
+            if (is_dir($path)) {
+                deleteDirectoryContents($path);
+            } else {
+                unlink($path);
+            }
+        }
+
+        return true;
+    }
+// Function to delete a directory content
+    function deleteDirectory($dir) {
+        if (!file_exists($dir)) {
+            return true;
+        }
+
+        if (!is_dir($dir)) {
+            return unlink($dir);
+        }
+
+        foreach (scandir($dir) as $item) {
+            if ($item == '.' || $item == '..') {
+                continue;
+            }
+
+            if (!deleteDirectory($dir . DIRECTORY_SEPARATOR . $item)) {
+                return false;
+            }
+        }
+
+        return rmdir($dir);
+    }
 
 //-----------------------------------------------------------------------------------------------------------
 // Optional Step: Clean up the space
-    // Empty the directory
-    if (deleteDirectoryContents(TEMP_DIRECTORY) && deleteDirectoryContents(CSV_DIRECTORY)) {
-        logMessage("Directory:[ " . TEMP_DIRECTORY . " ] contents deleted successfully.\n");
-        logMessage("Directory:[ " . CSV_DIRECTORY . " ] contents deleted successfully.\n");
-        logMessage("Clean up complete.\n");
+    // Empty the available directories if they exist
+    if(file_exists(TEMP_DIRECTORY)){
+        if (deleteDirectoryContents(TEMP_DIRECTORY) && deleteDirectoryContents(CSV_DIRECTORY)) {
+            logMessage("Directory:[ " . TEMP_DIRECTORY . " ] contents deleted successfully.\n");
+            logMessage("Directory:[ " . CSV_DIRECTORY . " ] contents deleted successfully.\n");
+            logMessage("Clean up complete.\n");
+        } else {
+            logMessage("Failed to delete the directory contents.\n");
+        }
     } else {
-        logMessage("Failed to delete the directory contents.\n");
+        if (deleteDirectoryContents(CSV_DIRECTORY)) {
+            logMessage("Directory:[ " . CSV_DIRECTORY . " ] contents deleted successfully.\n");
+            logMessage("Clean up complete.\n");
+        } else {
+            logMessage("Failed to delete the directory contents.\n");
+        }
     }
+
 
 // Step 1: Create the temporary directory if it doesn't exist
     if (!file_exists(TEMP_DIRECTORY)) {
@@ -85,10 +117,10 @@ function deleteDirectoryContents($dir) {
         $zip->extractTo(TEMP_DIRECTORY);
         $zip->close();
         // Debugging: Output a timestamped message
-        logMessage(" Master repository extracted successfully.");
+        logMessage(" Master repository extracted successfully.\n");
     } else {
         // Debugging: Output a timestamped message
-        logMessage(" Failed to extract master repository.");
+        logMessage(" Failed to extract master repository.\n");
     }
 
 // Step 4: Copy CSV files to a separate folder
@@ -106,9 +138,10 @@ function deleteDirectoryContents($dir) {
         $destinationFile = $destinationPath . '/' . basename($csvFile);
         copy($csvFile, $destinationFile);
         // Debugging: Output a timestamped message
-        logMessage("Copied CSV file: $destinationFile \n");
+        logMessage("Copied CSV file: [$csvFile] into working directory. \n");
     }
     copy($zipFile, $destinationFile);
+    logMessage("Copied Master file: [$zipFile] into working directory. \n");
 
 // Step 5: Clean up the temp files except the Master zip file
     // Empty the directory
@@ -116,7 +149,7 @@ function deleteDirectoryContents($dir) {
         logMessage("Directory:[ " . TEMP_DIRECTORY . " ] contents deleted successfully.\n");
         
         // Now, you can remove the directory itself
-        if (rmdir(TEMP_DIRECTORY)) {
+        if (deleteDirectory(TEMP_DIRECTORY)) {
             logMessage("Directory:[ " . TEMP_DIRECTORY . " ] removed successfully.\n");
             logMessage("Clean up complete.\n");
         } else {
