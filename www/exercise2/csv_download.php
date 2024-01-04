@@ -10,6 +10,7 @@ ini_set('memory_limit', '1G');
 // Define constants
 define('CSV_DIRECTORY', '/shared_files');
 define('TEMP_DIRECTORY', '/var/www/html/exercise2/temp');
+$logFile = '/var/www/html/exercise2/logFile.log';     // Log file for debugging
 
 // Debugging: Output a timestamped message with a newline
 function logMessage($message) {
