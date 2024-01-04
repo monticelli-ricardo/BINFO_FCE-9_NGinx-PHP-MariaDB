@@ -4,7 +4,7 @@
     include('simple_html_dom.php'); // Include the Simple HTML DOM Parser
 //-----------------------------------------------------------------------------------------------------------  
 /// Initial Script confuguration
-    ini_set('memory_limit', '1G');  // Increasing the memory limit to avoid any exhaustion
+    ini_set('memory_limit', '3G');  // Increasing the memory limit to avoid any exhaustion
     ini_set('display_errors', 1);
     ini_set('display_startup_errors', 1);
     error_reporting(E_ALL);
@@ -19,11 +19,18 @@
         $database_password = 'webprog';
         $database_name = 'webprog';
 
-    // CSV directory
+    // Shared volume CSV directory
         define('CSV_DIRECTORY', '/shared_files');
 
     // Table name constant
         define('TABLE_NAME', 'master_csv_table');
+    
+    // MariaDB container Name constant
+        define('MARIADB_NAME', 'docker-nginx-php-mariadb-DB-1');
+    
+    // MariaDB working directory
+        define('DB_FILES_DIRECTORY', '/var/lib/mysql/webprog');
+
 
     // list of CSV file that we are going to download from the GitHub source
         $csvFiles = [];
@@ -60,8 +67,41 @@
         logMessage("SQL Statement: $query \n");
 
         try {
-            $stmt->execute();
-            logMessage("Table $tableName created successfully.\n");
+            if($stmt->execute()){
+                logMessage("Table $tableName created successfully.\n");
+            } else {
+                logMessage("Table $tableName might already exist. Checking...\n");
+                $stmtTableExists->bindParam(1, $tableName, PDO::PARAM_STR);
+                $stmtTableExists->execute();
+                $tableExists = $stmtTableExists->rowCount() > 0;
+
+                if($tableExists){
+                    logMessage("Table $tableName exists.\n");
+
+                    // Query to show columns from the existing table
+                    $queryShowColumns = "SHOW COLUMNS FROM $tableName";
+                    
+                    // Execute the query to get columns
+                    $stmtShowColumns = $pdo->prepare($queryShowColumns);
+                    $stmtShowColumns->execute();
+            
+                    // Fetch the result and log each column
+                    $columnsResult = $stmtShowColumns->fetchAll(PDO::FETCH_ASSOC);
+                    logMessage("Columns for $tableName:\n");
+            
+                    foreach ($columnsResult as $column) {
+                        $columnName = $column['Field'];
+                        logMessage(" - $columnName\n");
+                    }
+
+                } else{
+                    $errorInfo = $stmt->errorInfo();
+                    if($errorInfo){
+                        logMessage( "Error: " . $errorInfo[2]. "\n");
+                    }  
+                }
+
+            }
         } catch (PDOException $e) {
             logMessage("Error creating table 'covid_data': " . $e->getMessage() . "\n");
         }
@@ -117,7 +157,7 @@
         }
     }
 
-    // Function to check if a column exists in the database table
+// Function to check if a column exists in the database table
         function columnExistsInTable($columnName, $pdo)
         {
             $tableName = TABLE_NAME;
@@ -139,7 +179,45 @@
 
             return $result['count'] > 0;
         }
+// Function to move all CSV files from the shared volume to a specified directory
+    function copyCsvFiles($sourceDirectory, $destinationDirectory) {
+        try {
+            // Create the destination directory if it doesn't exist
+            if (!file_exists($destinationDirectory)) {
+                mkdir($destinationDirectory, 0777, true);
+            } else {
+                // Clean the destination directory
+                deleteDirectoryContents($destinationDirectory);
+            }
 
+            // Get all CSV files in the source directory
+            $csvFiles = glob($sourceDirectory . '/*.csv');
+
+            // Move each CSV file to the destination directory
+            foreach ($csvFiles as $csvFile) {
+                $destinationFile = $destinationDirectory . '/' . basename($csvFile);
+
+                // Use shell command to move the file
+                $command = "docker cp $sourceDirectory " . MARIADB_NAME . ":$destinationDirectory";
+                if (exec($command)) {
+                    // Debugging: Output a timestamped message
+                    logMessage(" File moved: " . basename($csvFile) . " to $destinationDirectory\n");
+                } else {
+                    // Debugging: Output an error message if the move command fails
+                    $errorMessage = "Error moving file: " . basename($csvFile) . " to $destinationDirectory";
+                    logMessage($errorMessage . "\n");
+                    // You can also log the specific error message returned by the command
+                    logMessage("Error message: " . shell_exec($command) . "\n");
+                }
+            }
+
+            logMessage("CSV files moved successfully.\n");
+
+        } catch (Exception $e) {
+            // Handle exceptions
+            logMessage("Error moving CSV files: " . $e->getMessage() . "\n");
+        }
+    }
 // Function to delete a directory content
     function deleteDirectoryContents($dir) {
         if (!file_exists($dir) || !is_dir($dir)) {
@@ -198,6 +276,11 @@
     // Directory source of the local CSV files
         $csvDirectory = CSV_DIRECTORY;
         logMessage("COVID-19 reports CSV source directory: $csvDirectory\n");
+    // // Moving the files to MariaDB working directory
+    //     $workingDirectory = DB_FILES_DIRECTORY;
+    //     logMessage("MariaDB working directory: $workingDirectory\n");
+    //     copyCsvFiles($csvDirectory, $workingDirectory);
+
     // Cache for storing CSV data
         $cachedData = [];
     
@@ -343,11 +426,7 @@
                     $pdo->rollBack();
                     logMessage("Data from $fileName was NOT inserted into " . TABLE_NAME . " successfully.\n");
                 }
-
-                
             }
-
-            
 
             // Re-enable Foreign Key Checks and Unique Constraints
                 $pdo->exec('SET @@session.unique_checks = 1');
