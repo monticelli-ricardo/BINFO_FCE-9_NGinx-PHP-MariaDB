@@ -179,6 +179,26 @@
 
             return $result['count'] > 0;
         }
+
+// Function to fetch column metadata from the database
+function fetchColumnMetadataFromDatabase($tableName, $pdo) {
+    // Prepare and execute a query to fetch column information
+    $query = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ?";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$tableName]);
+
+    // Fetch the results into an associative array
+    $columns = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $columns[$row['column_name']] = [
+            'data_type' => $row['data_type'],
+            // Add other relevant metadata if needed
+        ];
+    }
+
+    return $columns;
+}
+
 // Function to move all CSV files from the shared volume to a specified directory
     function copyCsvFiles($sourceDirectory, $destinationDirectory) {
         try {
@@ -311,9 +331,9 @@
     //             logMessage(" File does not exist: $csvFile \n");
     //         }
     //      }
+    //
 
     // Populate the cachedData array with CSV file content
-        $cachedData = [];
         foreach ($csvFiles as $csvFile) {
             $fileName = basename($csvFile);
             $fileContent = file_get_contents($csvFile);
@@ -387,46 +407,77 @@
 
             // Create the master table
                 createMasterTable(TABLE_NAME, $columns, $pdo);
+            // Retrieve column metadata from your database
+                $columns = fetchColumnMetadataFromDatabase($tableName, $pdo);
+
+            // Now $columns should contain the metadata for columns in the specified table
+                var_dump($columns);
 
             // Assuming $cachedData is an associative array where keys are file names and values are file contents
             // Loop through each CSV file
-            foreach ($cachedData as $fileName => $fileContent) {
-                // Get the column names from the first line of the file
-                $handle = fopen("data://text/plain;base64," . base64_encode($fileContent), 'r');
-                $csvColumns = fgetcsv($handle);
-                fclose($handle);
+                foreach ($cachedData as $fileName => $fileContent) {
+                    // Get the column names from the first line of the file
+                    $handle = fopen("data://text/plain;base64," . base64_encode($fileContent), 'r');
+                    $csvColumns = fgetcsv($handle);
+                    fclose($handle);
 
-                // Generate the LOAD DATA INFILE query with dynamic columns
-                $query = "LOAD DATA INFILE '$fileName' INTO TABLE " . TABLE_NAME .
-                        " FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\n' IGNORE 1 ROWS" .
-                        " (";
+                    // Initialize an array to store processed rows
+                    $processedRows = [];
 
-                // Prepare an array to store columns to insert
-                $columnsToInsert = [];
+                    // Process the content within the $cachedData array
+                    foreach (str_getcsv($fileContent, "\n") as $row) {
+                        // Convert each value based on column data type
+                        $rowData = [];
+                        foreach (str_getcsv($row) as $index => $value) {
+                            $column = $csvColumns[$index];
+                            $dataType = $columns[$column]['data_type']; // Assuming $columns is an array with column metadata
+                            $convertedValue = convertValue($value, $dataType);
+                            $rowData[$column] = $convertedValue;
+                        }
 
-                // Loop through CSV columns
-                foreach ($csvColumns as $csvColumn) {
-                    // Check if the column exists in the database table
-                    if (columnExistsInTable($csvColumn, $pdo)) {
-                        $columnsToInsert[] = $csvColumn;
+                        // Add the processed row to the array
+                        $processedRows[] = $rowData;
+                    }
+
+                    // Cache the processed data
+                    $cachedData[$fileName] = $processedRows;
+
+                    // Generate the LOAD DATA INFILE query with dynamic columns
+                    $query = "LOAD DATA INFILE '$fileName' INTO TABLE " . TABLE_NAME .
+                            " FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\n' IGNORE 1 ROWS" .
+                            " (";
+
+                    // Prepare an array to store columns to insert
+                    $columnsToInsert = [];
+
+                    // Loop through CSV columns
+                    foreach ($csvColumns as $csvColumn) {
+                        // Check if the column exists in the database table
+                        if (columnExistsInTable($csvColumn, $pdo)) {
+                            $columnsToInsert[] = $csvColumn;
+                        } else {
+                            logMessage("Column '$csvColumn' does not exist in the database table. Skipping.\n");
+                        }
+                    }
+
+                    // Add the columns to the query
+                    $query .= implode(', ', $columnsToInsert) . ")";
+
+                    // Prepare and execute the query
+                    $stmt = $pdo->prepare($query);
+                    if($stmt->execute()){
+                        $pdo->commit();
+                        logMessage("Data from $fileName inserted into " . TABLE_NAME . " successfully.\n");
                     } else {
-                        logMessage("Column '$csvColumn' does not exist in the database table. Skipping.\n");
+                        $pdo->rollBack();
+                        logMessage("Data from $fileName was NOT inserted into " . TABLE_NAME . " successfully.\n");
+                        // Log the detailed error information
+                        $errorInfo = $stmt->errorInfo();
+                        logMessage("PDO Error Code: {$errorInfo[0]}\n");
+                        logMessage("Driver Error Code: {$errorInfo[1]}\n");
+                        logMessage("Driver Error Message: {$errorInfo[2]}\n");
                     }
                 }
-
-                // Add the columns to the query
-                $query .= implode(', ', $columnsToInsert) . ")";
-
-                // Prepare and execute the query
-                $stmt = $pdo->prepare($query);
-                if($stmt->execute()){
-                    $pdo->commit();
-                    logMessage("Data from $fileName inserted into " . TABLE_NAME . " successfully.\n");
-                } else {
-                    $pdo->rollBack();
-                    logMessage("Data from $fileName was NOT inserted into " . TABLE_NAME . " successfully.\n");
-                }
-            }
 
             // Re-enable Foreign Key Checks and Unique Constraints
                 $pdo->exec('SET @@session.unique_checks = 1');
