@@ -1,14 +1,17 @@
 <?php
 //-----------------------------------------------------------------------------------------------------------
 // Defining Variables
-// Log file for debugging
-$logFile = '/var/www/html/exercise2/webLogFile.log';
+    // Log file for debugging
+    $logFile = '/var/www/html/exercise2/webLogFile.log';
 
-// Database connection details
-$database_host = 'DB';
-$database_user = 'webprog';
-$database_password = 'webprog';
-$database_name = 'webprog';
+    // Database connection details
+    $database_host = 'DB';
+    $database_user = 'webprog';
+    $database_password = 'webprog';
+    $database_name = 'webprog';
+
+    // MariaDB table name constant
+    define('TABLE_NAME', 'covid_data');
 
 //-----------------------------------------------------------------------------------------------------------
 // Defining functions
@@ -31,7 +34,7 @@ function isValidDateFormat($date)
 // Function to validate country against a list
 function isValidCountry($country, $pdo)
 {
-    $query = "SELECT COUNT(*) FROM covid_data WHERE Country_Region LIKE ?";
+    $query = "SELECT COUNT(*) FROM " . TABLE_NAME. " WHERE Country_Region LIKE ?";
     $stmt = $pdo->prepare($query);
     $stmt->execute([$country]);
     $count = $stmt->fetchColumn();
@@ -64,7 +67,7 @@ try {
             logMessage("Invalid country: $country. Please enter a valid country.\n");
             echo "List of valid countries:";
             // Output the list of valid countries from the database
-            $validCountries = $pdo->query("SELECT DISTINCT Country_Region FROM covid_data")->fetchAll(PDO::FETCH_COLUMN);
+            $validCountries = $pdo->query("SELECT DISTINCT Country_Region FROM " . TABLE_NAME )->fetchAll(PDO::FETCH_COLUMN);
             echo "<ul>";
             foreach ($validCountries as $validCountry) {
                 echo "<li>$validCountry</li>";
@@ -75,7 +78,7 @@ try {
 
         // Query the database using prepared statements
         $query = "SELECT SUM(confirmed) AS confirmed, SUM(recovered) AS recovered, SUM(deaths) AS deaths 
-                FROM covid_data 
+                FROM " . TABLE_NAME. " 
                 WHERE Last_Update BETWEEN ? AND ? AND Country_Region LIKE ?";
         $stmt = $pdo->prepare($query);
         $stmt->execute([$startDate, $endDate, $country]);
@@ -104,13 +107,13 @@ try {
 
 <body>
     <h1>COVID-19 Statistics</h1>
-
+    <h4>Source: <a href='https://github.com/CSSEGISandData/COVID-19'>JHU CSSE COVID-19 Data</a></h4>
     <form method="post" action="">
     <label for="start_date">Start Date:</label>
-    <input type="date" name="start_date" pattern="\d{4}-\d{2}-\d{2}" required>
+    <input type="date" name="start_date" pattern="\d{2}-\d{2}-\d{4}" required>
     
     <label for="end_date">End Date:</label>
-    <input type="date" name="end_date" pattern="\d{4}-\d{2}-\d{2}" required>
+    <input type="date" name="end_date" pattern="\d{2}-\d{2}-\d{4}"required>
     
     <label for="country">Country/Region:</label>
     <input type="text" name="country" required>
