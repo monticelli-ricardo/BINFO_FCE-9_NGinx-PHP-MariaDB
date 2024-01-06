@@ -21,13 +21,13 @@
         define('CSV_DIRECTORY', '/shared_files');
     
     // CSV file
-        $csvFileName = 'master_file.csv';
+        $csvFileName = 'master_covid19_file.csv';
         $csvFilePath = CSV_DIRECTORY . '/' . $csvFileName;
     
     // CSV columns name
         $csv_columns = ['FIPS', 'Admin2', 'Province_State', 'Country_Region', 'Last_Update', 'Lat', 'Long_', 'Confirmed', 'Deaths', 'Recovered', 'Active', 'Combined_Key', 'Incident_Rate', 'Case_Fatality_Ratio'];
     
-    // CSV column names and data types
+    // CSV column names and their respective data types
         $columns = [
             'FIPS' => 'INT',
             'Admin2' => 'VARCHAR(255)',
@@ -47,7 +47,7 @@
 
     // MariaDB table name constant
         define('TABLE_NAME', 'master_csv_table');
-        $tableName = TABLE_NAME;
+        $tableName = TABLE_NAME; // redundant
 
 //-----------------------------------------------------------------------------------------------------------
 // Defnining functions
@@ -187,11 +187,7 @@ try {
         $validColumns = array_diff($header, ['id']);
 
         // Prepare SQL statement
-        $columnsString = implode(', ', array_keys($columns));
-        $valuesString = implode(', ', array_fill(0, count($columns), '?'));
-
-        $sql = "INSERT INTO $tableName ($columnsString) VALUES ($valuesString)";
-
+        $sql = "INSERT INTO " . TABLE_NAME . " (FIPS, Admin2, Province_State, Country_Region, Last_Update, Lat, Long_, Confirmed, Deaths, Recovered, Active, Combined_Key, Incident_Rate, Case_Fatality_Ratio) VALUES (:FIPS, :Admin2, :Province_State, :Country_Region, :Last_Update, :Lat, :Long_, :Confirmed, :Deaths, :Recovered, :Active, :Combined_Key, :Incident_Rate, :Case_Fatality_Ratio)";
         $stmt = $pdo->prepare($sql);
 
 
@@ -205,9 +201,8 @@ try {
                 unset($value); // Unset the reference to avoid potential memory issues 
             }
         
-            // Bind values to the prepared statement
+            // Bind values to the prepared SQL statement
             bindValues($stmt, $columns, $header, $row);
-            logMessage("Generated SQL Statement: " . $stmt->queryString . "\n");
 
             // Execute the statement
             if ($stmt->execute()) {
@@ -230,6 +225,11 @@ try {
         logMessage("File $csvFileName not found.\n");
     }
 
+    // Perform a textual dump of the database webprog
+    $sql_dump = "mysqldump -u $database_password -p $database_password $database_name > dump.sql";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+
 } catch (PDOException $e) {
     // Roll back the transaction in case of an exception
     $pdo->rollBack();
@@ -239,6 +239,7 @@ try {
     $pdo->rollBack();
     logMessage("An unexpected error occurred: " . $e->getMessage());
 }
+
 
 // Close the database connections
 $pdo = null;
