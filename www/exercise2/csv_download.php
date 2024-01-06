@@ -28,7 +28,7 @@ function logMessage($message) {
 function downloadFile($url, $destination)
 {
     // Debugging: Output a timestamped message
-    logMessage(" Downloading file: $url\n");
+    logMessage("Downloading file: $url\n");
 
     // Download the master file
     $fileContent = file_get_contents($url);
@@ -36,10 +36,10 @@ function downloadFile($url, $destination)
     if ($fileContent !== false) {
         file_put_contents($destination, $fileContent);
         // Debugging: Output a timestamped message
-        logMessage(" File downloaded successfully: $destination\n");
+        logMessage("File downloaded successfully: $destination\n");
     } else {
         // Debugging: Output a timestamped message
-        logMessage(" Error downloading file: $url\n");
+        logMessage("Error downloading file: $url\n");
     }
 }
 
@@ -90,6 +90,9 @@ function downloadFile($url, $destination)
 
 
 //-----------------------------------------------------------------------------------------------------------
+// Record the start time
+$startTime = microtime(true);
+
 // Optional Step: Clean up the space before we start
     // Empty the available directories if they exist
     if(file_exists(TEMP_DIRECTORY)){
@@ -98,7 +101,7 @@ function downloadFile($url, $destination)
             logMessage("Directory:[ " . CSV_DIRECTORY . " ] contents deleted successfully.\n");
             logMessage("Clean up complete.\n");
         } else {
-            logMessage("Failed to delete the directory contents.\n");
+            logMessage("Failed to delete the directory [ " . TEMP_DIRECTORY . " ] contents. This directory does not exist.\n");
         }
     } else {
         if (deleteDirectoryContents(CSV_DIRECTORY)) {
@@ -142,24 +145,42 @@ function downloadFile($url, $destination)
     $sourcePath = TEMP_DIRECTORY . '/COVID-19-master/csse_covid_19_data/csse_covid_19_daily_reports/';
     $destinationPath = CSV_DIRECTORY;
 
-// Create the destination directory if it doesn't exist
-    if (!file_exists($destinationPath)) {
-        mkdir($destinationPath, 0755, true);
-    }
+    // Create the destination directory if it doesn't exist
+        if (!file_exists($destinationPath)) {
+            mkdir($destinationPath, 0755, true);
+        }
 
-// Copy CSV files and the Master file
-    $csvFiles = glob($sourcePath . '*.csv');
-    foreach ($csvFiles as $csvFile) {
-        $destinationFile = $destinationPath . '/' . basename($csvFile);
-        copy($csvFile, $destinationFile);
-        // Debugging: Output a timestamped message
-        logMessage("Copied CSV file: [$csvFile] into the working directory. \n");
-    }
-    copy($zipFile, $destinationFile);
-    logMessage("Copied Master file: [$zipFile] into the working directory. \n");
+    // Copy CSV files and the Master file
+        $csvFiles = glob($sourcePath . '*.csv');
+        // Iterate through each file and copy only if it falls within the specified date range
+        foreach ($csvFiles as $csvFile) {
+            $filename = basename($csvFile);
+            $datePart = substr($filename, 0, 10);
+            $fileDate = strtotime($datePart);
+
+            if ($fileDate >= START_DATE && $fileDate <= END_DATE) {
+                // Copy the file to the destination path
+                $destinationFile = $destinationPath . '/' . $filename;
+                if(copy($csvFile, $destinationFile)){
+                    logMessage("Copied Master file: [$csvFile] into the working directory. \n");
+                    // unlink (delete) the original file after copying
+                    unlink($csvFile);
+                } else {
+                    logMessage("Error: Required CSV file: [$csvFile] Not copied.\n");
+                }
+
+            }
+        }
+        if(copy($zipFile, ($destinationPath . '/' . basename($zipFile)))){
+            logMessage("Copied Master file: [$zipFile] into the working directory. \n");
+            unlink($zipFile); // unlink (delete) the original file after copying
+        } else{
+            logMessage("Error: Master file: [$zipFile] Not copied.\n");
+        }
+        
 
 // Step 5: Clean up 
-    // Empty the temp directory
+    // Ensure to empty the temp directory and remove it
     if (deleteDirectoryContents(TEMP_DIRECTORY)) {
         logMessage("Directory:[ " . TEMP_DIRECTORY . " ] contents deleted successfully.\n");
         
@@ -174,8 +195,14 @@ function downloadFile($url, $destination)
         logMessage("Failed to delete the temporal directory contents.\n");
     }
 
+// Record the end time
+$endTime = microtime(true);
 
+// Calculate the execution time
+$executionTime = $endTime - $startTime;
 
+// Output the execution time
+logMessage("Script execution time: " . number_format($executionTime, 4) . " seconds\n");
 
 
 //-----------------------------------------------------------------------------------------------------------
