@@ -30,14 +30,51 @@
             global $logFile;
             file_put_contents($logFile, "[" . date("Y-m-d H:i:s") . "] " . $message . "\n", FILE_APPEND);
         }
+    
+    // Function to keep organized the Shared Volume    
+        function requiredCSVFiles($start, $end) {
+        
+            // Get the current date
+            $currentDate = new DateTime('now');
+            // Check if the directory exists
+            if (is_dir($sharedVolumePath)) {
+                // Iterate through the directory contents
+                foreach (new DirectoryIterator(CSV_DIRECTORY) as $fileInfo) {
+                    if ($fileInfo->isDot()) {
+                        continue;
+                    }
+            
+                    // Check if the file is a CSV file and matches the date criteria
+                    if ($fileInfo->isFile() && $fileInfo->getExtension() === 'csv') {
+                        $fileDate = DateTime::createFromFormat('Y-m-d', $fileInfo->getBasename('.csv'));
+                        // Check the date in the file name
+                        if ($fileDate && $fileDate >= new DateTime($start) && $fileDate <= new DateTime($end)) {
+                            // Exclude files from the cleanup
+                            continue;
+                        }
+                    }
+                    // Delete the file
+                    unlink($fileInfo->getPathname());
+                }
+            } else {
+                    // Handle the case when the directory does not exist
+                    logMessage("Directory not found: $sharedVolumePath.\n");
+                }
+        
+            // Output a message indicating cleanup completion
+            logMessage("Shared volume cleanup completed.\n");
+        }
 
 //-----------------------------------------------------------------------------------------------------------
 // Merge CSV logic
 try {
-       // Loop through each date in the range
-       while ($start_date <= $end_date) {
-        $current_date = date('d-m-Y', $start_date);
-        $file_path = CSV_DIRECTORY . '/' . $current_date . '.csv';
+
+    // Work only with the required CSV files
+    requiredCSVFiles(START_DATE, END_DATE);
+    // Loop through each date in the range
+    while ($start_date <= $end_date) {
+    $current_date = date('d-m-Y', $start_date);
+    $file_path = CSV_DIRECTORY . '/' . $current_date . '.csv';
 
         // Check if the file exists
         if (file_exists($file_path)) {

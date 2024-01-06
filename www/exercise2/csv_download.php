@@ -87,40 +87,10 @@ function downloadFile($url, $destination)
         return rmdir($dir);
     }
 
-// Function to keep organized the Shared Volume    
-    function requiredCSVFiles($start, $end) {
-        // Set the path to the shared volume
-        $sharedVolumePath = __DIR__ . CSV_DIRECTORY;
-    
-        // Get the current date
-        $currentDate = new DateTime('now');
-    
-        // Iterate through files in the directory
-        foreach (new DirectoryIterator($sharedVolumePath) as $fileInfo) {
-            if ($fileInfo->isDot()) {
-                continue;
-            }
-    
-            // Check if the file is a CSV file and matches the date criteria
-            if ($fileInfo->isFile() && $fileInfo->getExtension() === 'csv') {
-                $fileDate = DateTime::createFromFormat('Y-m-d', $fileInfo->getBasename('.csv'));
-                
-                if ($fileDate && $fileDate >= new DateTime($start) && $fileDate <= new DateTime($end)) {
-                    // Exclude files from the cleanup
-                    continue;
-                }
-            }
-    
-            // Delete the file
-            unlink($fileInfo->getPathname());
-        }
-    
-        // Output a message indicating cleanup completion
-        logMessage("Shared volume cleanup completed.\n");
-    }
+
 
 //-----------------------------------------------------------------------------------------------------------
-// Optional Step: Clean up the space
+// Optional Step: Clean up the space before we start
     // Empty the available directories if they exist
     if(file_exists(TEMP_DIRECTORY)){
         if (deleteDirectoryContents(TEMP_DIRECTORY) && deleteDirectoryContents(CSV_DIRECTORY)) {
@@ -203,8 +173,7 @@ function downloadFile($url, $destination)
     } else {
         logMessage("Failed to delete the temporal directory contents.\n");
     }
-    // Keep only the required CSV files
-    requiredCSVFiles(START_DATE, END_DATE);
+
 
 
 
