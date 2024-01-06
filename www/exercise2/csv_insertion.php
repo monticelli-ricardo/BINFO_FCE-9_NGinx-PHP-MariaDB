@@ -20,11 +20,34 @@
     // Shared volume, source of the CSV directory
         define('CSV_DIRECTORY', '/shared_files');
     
+    // CSV file
+        $csvFileName = 'master_file.csv';
+        $csvFilePath = CSV_DIRECTORY . '/' . $csvFileName;
+    
     // CSV columns name
         $csv_columns = ['FIPS', 'Admin2', 'Province_State', 'Country_Region', 'Last_Update', 'Lat', 'Long_', 'Confirmed', 'Deaths', 'Recovered', 'Active', 'Combined_Key', 'Incident_Rate', 'Case_Fatality_Ratio'];
     
+    // CSV column names and data types
+        $columns = [
+            'FIPS' => 'INT',
+            'Admin2' => 'VARCHAR(255)',
+            'Province_State' => 'VARCHAR(255)',
+            'Country_Region' => 'VARCHAR(255)',
+            'Last_Update' => 'DATETIME',
+            'Lat' => 'FLOAT',
+            'Long_' => 'FLOAT',
+            'Confirmed' => 'INT',
+            'Deaths' => 'INT',
+            'Recovered' => 'INT',
+            'Active' => 'INT',
+            'Combined_Key' => 'VARCHAR(255)',
+            'Incident_Rate' => 'FLOAT',
+            'Case_Fatality_Ratio' => 'FLOAT'
+        ];
+
     // MariaDB table name constant
         define('TABLE_NAME', 'master_csv_table');
+        $tableName = TABLE_NAME;
 
 //-----------------------------------------------------------------------------------------------------------
 // Defnining functions
@@ -34,6 +57,20 @@
         echo "[" . date("Y-m-d H:i:s") . "] " . $message . " <br>";
         global $logFile;
         file_put_contents($logFile, "[" . date("Y-m-d H:i:s") . "] " . $message . "\n", FILE_APPEND);
+    }
+    
+    // Function to infer data type based on column name (static)
+    function inferDataType($columnName) {
+        // Example: infer data type based on column name
+        if (strpos($columnName, 'Last_Update') !== false) {
+            return 'DATETIME';
+        } elseif (strpos($columnName, 'Lat') !== false || strpos($columnName, 'Long_') !== false || strpos($columnName, 'Incident_Rate') !== false || strpos($columnName, 'Case_Fatality_Ratio') !== false) {
+            return 'FLOAT';
+        } elseif (strpos($columnName, 'Confirmed') !== false || strpos($columnName, 'Deaths') !== false || strpos($columnName, 'Recovered') !== false || strpos($columnName, 'Active') !== false) {
+            return 'INT';
+        } else {
+            return 'VARCHAR(255)';
+        }
     }
 
     // Function to create a single table for all CSV files
@@ -96,6 +133,36 @@
         }
     }
 
+    // function to handle the PDO parameter type based on your data types
+    function getParamType($dataType) {
+        switch ($dataType) {
+            case 'INT':
+                return PDO::PARAM_INT;
+            case 'FLOAT':
+                return PDO::PARAM_STR; // Assuming your FLOAT values are represented as strings
+            case 'VARCHAR(255)':
+                return PDO::PARAM_STR;
+            case 'DATETIME':
+                return PDO::PARAM_STR; // Assuming your DATETIME values are represented as strings
+            default:
+                return PDO::PARAM_STR; // Default to PARAM_STR if the data type is unknown
+        }
+    }
+
+    //
+    function bindValues($stmt, $columns, $header, $row) {
+        foreach ($columns as $columnName => $dataType) {
+
+            // Skip binding the 'id' column
+            if ($columnName === 'id') {
+                continue;
+            }
+            $index = array_search($columnName, $header);
+            $value = isset($row[$index]) ? $row[$index] : null;
+            $stmt->bindValue(':' . $columnName, $value, getParamType($dataType));
+        }
+    }
+
 //-----------------------------------------------------------------------------------------------------------
 // Insertion logic
 try {
@@ -107,94 +174,70 @@ try {
     $pdo->beginTransaction();
 
     // Create the master table if needed
-    $tableName = TABLE_NAME;
     createMasterTable($tableName, $csv_columns, $pdo);
 
-    // Iterate over the date range required
-    $startDate = new DateTime('2021-01-01');
-    $endDate = new DateTime('2021-06-30');
+    if (file_exists($csvFilePath)) {
+        // Read the CSV file
+        $csvData = array_map('str_getcsv', file($csvFilePath));
 
-    $currentDate = $startDate;
+        // Get the header from the CSV file
+        $header = array_shift($csvData);
 
-    while ($currentDate <= $endDate) {
-        $csvFileName = $currentDate->format('d-m-Y') . '.csv';
-        $csvFilePath = CSV_DIRECTORY . '/' . $csvFileName;
+        // Filter columns based on the header, excluding 'id'
+        $validColumns = array_diff($header, ['id']);
 
-        if (file_exists($csvFilePath)) {
-            // Read the CSV file
-            $csvData = array_map('str_getcsv', file($csvFilePath));
+        // Prepare SQL statement
+        $columnsString = implode(', ', array_keys($columns));
+        $valuesString = implode(', ', array_fill(0, count($columns), '?'));
 
-            // Get column names and data types
-            $columns = [
-                'FIPS' => 'INT',
-                'Admin2' => 'VARCHAR(255)',
-                'Province_State' => 'VARCHAR(255)',
-                'Country_Region' => 'VARCHAR(255)',
-                'Last_Update' => 'DATETIME',
-                'Lat' => 'FLOAT',
-                'Long_' => 'FLOAT',
-                'Confirmed' => 'INT',
-                'Deaths' => 'INT',
-                'Recovered' => 'INT',
-                'Active' => 'INT',
-                'Combined_Key' => 'VARCHAR(255)',
-                'Incident_Rate' => 'FLOAT',
-                'Case_Fatality_Ratio' => 'FLOAT'
-            ];
+        $sql = "INSERT INTO $tableName ($columnsString) VALUES ($valuesString)";
 
-            // Prepare SQL statement
-            $columnsString = implode(', ', array_keys($columns));
-            $valuesString = implode(', ', array_fill(0, count($columns), '?'));
+        $stmt = $pdo->prepare($sql);
 
-            $sql = "INSERT INTO $tableName ($columnsString) VALUES ($valuesString)";
 
-            $stmt = $pdo->prepare($sql);
+        // Insert data into the database
+        $rowNumber = 1; // Initialize row number counter
 
-            // Insert data into the database
-            foreach ($csvData as $row) {
-                // Replace empty values with '0' or null
-                foreach ($row as &$value) {
-                    $value = ($value === '') ? (is_numeric($value) ? 0 : null) : $value;
-                }
-
-                // Bind values to the prepared statement
-                foreach ($columns as $columnName => $dataType) {
-                    if (!isset($row[$columnName])) {
-                        logMessage("Warning: Undefined array key \"$columnName\" in row.\n");
-                    }
-                    $stmt->bindValue(':' . $columnName, $row[$columnName], PDO::PARAM_STR);
-                }               
-
-                // Execute the statement
-                if ($stmt->execute()) {
-                    logMessage("Data from $csvFileName inserted into your_table_name successfully.\n");
-                } else {
-                    // Log the detailed error information
-                    $errorInfo = $stmt->errorInfo();
-                    logMessage("Data from $csvFileName was NOT inserted into your_table_name successfully.\n");
-                    logMessage("PDO Error Code: {$errorInfo[0]}\n");
-                    logMessage("Driver Error Code: {$errorInfo[1]}\n");
-                    logMessage("Driver Error Message: {$errorInfo[2]}\n");
-                }
+        foreach ($csvData as $row) {
+            // Replace empty values in the row with null
+            foreach ($row as &$value) {
+                $value = ($value === '') ? null : $value;
+                unset($value); // Unset the reference to avoid potential memory issues 
             }
+        
+            // Bind values to the prepared statement
+            bindValues($stmt, $columns, $header, $row);
+            logMessage("Generated SQL Statement: " . $stmt->queryString . "\n");
 
-            // Commit the transaction after all inserts for this file
-            $pdo->commit();
-        } else {
-            logMessage("File $csvFileName not found.\n");
+            // Execute the statement
+            if ($stmt->execute()) {
+                logMessage("Data from $csvFileName inserted into your_table_name successfully.\n");
+            } else {
+                // Log the detailed error information
+                $errorInfo = $stmt->errorInfo();
+                logMessage("Data from $csvFileName was NOT inserted into your_table_name successfully.\n");
+                logMessage("PDO Error Code: {$errorInfo[0]}\n");
+                logMessage("Driver Error Code: {$errorInfo[1]}\n");
+                logMessage("Driver Error Message: {$errorInfo[2]}\n");
+            }
+           // Increment the row number counter
+           $rowNumber++;
         }
 
-        // Move to the next date
-        $currentDate->modify('+1 day');
+        // Commit the transaction after all inserts for this file
+        $pdo->commit();
+    } else {
+        logMessage("File $csvFileName not found.\n");
     }
+
 } catch (PDOException $e) {
     // Roll back the transaction in case of an exception
     $pdo->rollBack();
-    logMessage("Error: " . $e->getMessage() . "\n");
+    logMessage("Error: " . $e->getMessage());
 } catch (Exception $e) {
     // Roll back the transaction in case of an unexpected exception
     $pdo->rollBack();
-    logMessage("An unexpected error occurred: " . $e->getMessage() . "\n");
+    logMessage("An unexpected error occurred: " . $e->getMessage());
 }
 
 // Close the database connections
