@@ -138,7 +138,7 @@ function downloadFile($url, $destination)
             logMessage("Failed to delete the directory contents.\n The working directory  [ " . CSV_DIRECTORY . " ] does not exist.\n");
                 mkdir(CSV_DIRECTORY, 0755, true);
                 // Debugging: Output a timestamped message
-                logMessage(" Working directory created: [" . CSV_DIRECTORY . " ]\n");
+                logMessage("Working directory created: [" . CSV_DIRECTORY . " ]\n");
             
         }
     }
@@ -148,7 +148,7 @@ function downloadFile($url, $destination)
     if (!file_exists(TEMP_DIRECTORY)) {
         mkdir(TEMP_DIRECTORY, 0755, true);
         // Debugging: Output a timestamped message
-        logMessage(" Temporary directory created: " . TEMP_DIRECTORY. "\n");
+        logMessage("Temporary directory created: " . TEMP_DIRECTORY. "\n");
     }
 
 // Step 2: Download the master repository as a ZIP file
@@ -162,10 +162,10 @@ function downloadFile($url, $destination)
         $zip->extractTo(TEMP_DIRECTORY);
         $zip->close();
         // Debugging: Output a timestamped message
-        logMessage(" Master repository extracted successfully.\n");
+        logMessage("Master repository extracted successfully.\n");
     } else {
         // Debugging: Output a timestamped message
-        logMessage(" Failed to extract master repository.\n");
+        logMessage("Failed to extract master repository.\n");
     }
 
 // Step 4: Copy CSV files to a separate folder
