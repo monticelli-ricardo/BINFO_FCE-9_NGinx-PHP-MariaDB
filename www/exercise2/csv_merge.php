@@ -93,12 +93,12 @@
 
         // Write merged data to master CSV file
         $master_file = CSV_DIRECTORY . '/master_covid19_file.csv';
-        // Delete existing master file if it exists an older version
-            if (file_exists($master_file_path)) {
-                unlink($master_file_path);
+        // Delete existing master file if an older version exists
+            if (file_exists($master_file)) {
+                unlink($master_file);
                 logMessage("Existing master file deleted.\n");
             }
-
+        // Create a new master file
         $fp = fopen($master_file, 'w');
         if (!$fp) {
             throw new Exception('Error creating master file.');
