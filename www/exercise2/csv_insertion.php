@@ -20,14 +20,14 @@
     // Shared volume, source of the CSV directory
         define('CSV_DIRECTORY', '/shared_files');
     
-    // CSV file
-        $csvFileName = 'master_covid19_file.csv';
-        $csvFilePath = CSV_DIRECTORY . '/' . $csvFileName;
-    
+    // Set the date range
+        define('START_DATE','01-01-2021');
+        define('END_DATE', '06-30-2021');
+
     // CSV columns name
         $csv_columns = ['FIPS', 'Admin2', 'Province_State', 'Country_Region', 'Last_Update', 'Lat', 'Long_', 'Confirmed', 'Deaths', 'Recovered', 'Active', 'Combined_Key', 'Incident_Rate', 'Case_Fatality_Ratio'];
     
-    // CSV column names and their respective data types
+    // Table column names and their respective data types
         $columns = [
             'FIPS' => 'INT',
             'Admin2' => 'VARCHAR(255)',
@@ -46,7 +46,7 @@
         ];
 
     // MariaDB table name constant
-        define('TABLE_NAME', 'master_csv_table');
+        define('TABLE_NAME', 'covid19_table');
         $tableName = TABLE_NAME; // redundant
 
 //-----------------------------------------------------------------------------------------------------------
@@ -164,7 +164,7 @@
         }
     }
 
-    //
+    // Bind the column keys to the row values read
     function bindValues($stmt, $columns, $header, $row) {
         foreach ($columns as $columnName => $dataType) {
 
@@ -178,6 +178,86 @@
         }
     }
 
+    // Function to execute batch insert manually
+    function executeBatchInsert($pdo, $stmt, $insertValues) {
+        foreach ($insertValues as $values) {
+            $stmt->execute($values);
+        }
+    }
+    // loop through the days within that range and insert batches into DB.
+    function processCSVFiles($startDate, $endDate, $path, $table_columns, $tableName, $pdo) {
+        $currentDate = DateTime::createFromFormat('m-d-Y', $startDate)->getTimestamp();
+        $endDate = DateTime::createFromFormat('m-d-Y', $endDate)->getTimestamp();
+
+        // Loop through each day
+        while ($currentDate <= $endDate) {
+            $csvFileName = date("m-d-Y", $currentDate) . ".csv"; // Adjust the date format here
+            $csvFilePath = $path . "/" . $csvFileName;
+
+            // Process CSV file and insert data
+            if (file_exists($csvFilePath)) {
+                // Begin a transaction
+                $pdo->beginTransaction();
+
+                // Read the CSV file
+                $csvData = array_map('str_getcsv', file($csvFilePath));
+
+                // Get the header from the CSV file
+                $header = array_shift($csvData);
+
+                // Filter columns based on the header, excluding 'id'
+                $validColumns = array_diff($header, ['id']);
+
+                // Prepare SQL statement
+                $columnsString = implode(', ', array_keys($table_columns));
+                $valuesString = implode(', ', array_fill(0, count($table_columns), '?'));
+
+                $sql = "INSERT INTO $tableName ($columnsString) VALUES ($valuesString)";
+                $stmt = $pdo->prepare($sql);
+
+                $rowNumber = 1; // Initialize row number counter
+                $batchSize = 1000; // Choose an appropriate batch size
+                $insertValues = [];
+
+                foreach ($csvData as $row) {
+                    // Replace empty values in the row with null
+                    foreach ($row as &$value) {
+                        $value = ($value === '') ? null : $value;
+                        unset($value); // Unset the reference to avoid potential memory issues
+                    }
+
+                    // Bind values to the prepared SQL statement
+                    bindValues($stmt, $table_columns, $header, $row);
+
+                    // Add values to the batch array
+                    $insertValues[] = array_values($row);
+
+                    // Execute the statement in batches
+                    if ($rowNumber % $batchSize === 0) {
+                        executeBatchInsert($pdo, $stmt, $insertValues);
+                        $insertValues = []; // Reset the batch array
+                    }
+
+                    // Increment the row number counter
+                    $rowNumber++;
+                }
+
+                // Execute any remaining batch
+                if (!empty($insertValues)) {
+                    executeBatchInsert($pdo, $stmt, $insertValues);
+                }
+
+                // Commit the transaction after all inserts for this file
+                $pdo->commit();
+            } else {
+                logMessage("File [$csvFileName] not found.\n");
+            }
+
+            // Update the variable pointing to each CSV file
+            $currentDate = strtotime("+1 day", $currentDate);
+        }
+    }
+
 //-----------------------------------------------------------------------------------------------------------
 // Record the start time
 $startTime = microtime(true);
@@ -188,75 +268,11 @@ try {
     $pdo = new PDO("mysql:host=$database_host;dbname=$database_name", $database_user, $database_password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Begin a transaction
-    $pdo->beginTransaction();
-
     // Create the master table if needed
     createMasterTable($tableName, $csv_columns, $pdo);
 
-    if (file_exists($csvFilePath)) {
-        // Read the CSV file
-        $csvData = array_map('str_getcsv', file($csvFilePath));
-
-        // Get the header from the CSV file
-        $header = array_shift($csvData);
-
-        // Filter columns based on the header, excluding 'id'
-        $validColumns = array_diff($header, ['id']);
-
-        // Prepare SQL statement
-        $sql = "INSERT INTO " . TABLE_NAME . " (FIPS, Admin2, Province_State, Country_Region, Last_Update, Lat, Long_, Confirmed, Deaths, Recovered, Active, Combined_Key, Incident_Rate, Case_Fatality_Ratio) VALUES (:FIPS, :Admin2, :Province_State, :Country_Region, :Last_Update, :Lat, :Long_, :Confirmed, :Deaths, :Recovered, :Active, :Combined_Key, :Incident_Rate, :Case_Fatality_Ratio)";
-        $stmt = $pdo->prepare($sql);
-
-
-        // Insert data into the database
-        $rowNumber = 1; // Initialize row number counter
-
-        foreach ($csvData as $row) {
-            // Replace empty values in the row with null
-            foreach ($row as &$value) {
-                $value = ($value === '') ? null : $value;
-                unset($value); // Unset the reference to avoid potential memory issues 
-            }
-        
-            // Bind values to the prepared SQL statement
-            bindValues($stmt, $columns, $header, $row);
-
-            // Execute the statement
-            if ($stmt->execute()) {
-                logMessage("Row $rowNumber data from [$csvFileName] inserted into [$tableName] successfully.\n");
-            } else {
-                // Log the detailed error information
-                $errorInfo = $stmt->errorInfo();
-                logMessage("Row $rowNumber data from [$csvFileName] was NOT inserted into [$tableName] successfully.\n");
-                logMessage("PDO Error Code: {$errorInfo[0]}\n");
-                logMessage("Driver Error Code: {$errorInfo[1]}\n");
-                logMessage("Driver Error Message: {$errorInfo[2]}\n");
-            }
-           // Increment the row number counter
-           $rowNumber++;
-        }
-
-        // Commit the transaction after all inserts for this file
-        $pdo->commit();
-    } else {
-        logMessage("File [$csvFileName] not found.\n");
-    }
-
-    // Perform a textual dump of the database webprog
-    $sql_dump = "mysqldump -u $database_password -p $database_password $database_name > /shared_files/ex2_dump.sql";
-    $stmt = $pdo->prepare($sql_dump);
-    // Execute the statement
-    if ($stmt->execute()) {
-        logMessage("Textual dump complete. Result are here: /shared_files/ex2_dump.sql .\n");
-    } else {
-        // Log the detailed error information
-        $errorInfo = $stmt->errorInfo();
-        logMessage("Textual dump failed.\n");
-        logMessage("PDO Error Code: {$errorInfo[0]}\n");
-        logMessage("Driver Error Code: {$errorInfo[1]}\n");
-        logMessage("Driver Error Message: {$errorInfo[2]}\n");
-    }
+   // Process and insert
+   processCSVFiles(START_DATE, END_DATE, CSV_DIRECTORY, $columns, $tableName, $pdo);
 
 } catch (PDOException $e) {
     // Roll back the transaction in case of an exception
