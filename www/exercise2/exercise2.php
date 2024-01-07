@@ -11,7 +11,7 @@
     $database_name = 'webprog';
 
     // MariaDB table name constant
-    define('TABLE_NAME', 'covid_data');
+    define('TABLE_NAME', 'covid19_table');
 
 //-----------------------------------------------------------------------------------------------------------
 // Defining functions
