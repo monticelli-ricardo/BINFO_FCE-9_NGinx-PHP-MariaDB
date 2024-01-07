@@ -37,12 +37,12 @@
 	  docker-compose up -d
 
 - Part 1 - Step 4 - Run the script 'csv_download.php' via:
-  A. the local terminal command: docker exec -it docker-nginx-php-mariadb-php-1 php /var/www/html/exercise2/csv_download.php 
-  B. the local website 'http://localhost:8080/exercise2/csv_download.php'
+  (A.) the local terminal command: docker exec -it docker-nginx-php-mariadb-php-1 php /var/www/html/exercise2/csv_download.php
+  (B.) the local website 'http://localhost:8080/exercise2/csv_download.php'
 
-- Part 1 - Step 5 - Run the script 'csv_insertion.php' via
-  A. the local terminal command: docker exec -it docker-nginx-php-mariadb-php-1 php /var/www/html/exercise2/csv_insertion.php 
-  B. the local website 'http://localhost:8080/exercise2/csv_insertion.php'
+- Part 1 - Step 5 - Run the script 'csv_insertion.php' via:
+  (A.) the local terminal command: docker exec -it docker-nginx-php-mariadb-php-1 php /var/www/html/exercise2/csv_insertion.php 
+  (B.) the local website 'http://localhost:8080/exercise2/csv_insertion.php'
 
 - Part 2 - Step 6 - Reach the web application COVID19 statistics http://localhost:8080/exercise2/exercise2.php and execute any search
 
