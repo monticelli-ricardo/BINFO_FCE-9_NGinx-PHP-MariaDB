@@ -13,9 +13,8 @@ define('TEMP_DIRECTORY', '/var/www/html/exercise2/temp');
 $logFile = '/var/www/html/exercise2/logFile.log';     // Log file for debugging
 
 // Set the date range
-define('START_DATE','2021-01-01');
-define('END_DATE', '2021-06-30');
-
+define('START_DATE','01-01-2021');
+define('END_DATE', '06-30-2021');
 
 // Debugging: Output a timestamped message with a newline
 function logMessage($message) {
@@ -155,22 +154,27 @@ $startTime = microtime(true);
         // Iterate through each file and copy only if it falls within the specified date range
         foreach ($csvFiles as $csvFile) {
             $filename = basename($csvFile);
+            // Define the date range in UNIX formart
+            $startDate = DateTime::createFromFormat('m-d-Y', START_DATE)->getTimestamp();
+            $endDate = DateTime::createFromFormat('m-d-Y', END_DATE)->getTimestamp();
+            // Extract the date part from the filename
             $datePart = substr($filename, 0, 10);
-            $fileDate = strtotime($datePart);
-
-            if ($fileDate >= START_DATE && $fileDate <= END_DATE) {
+            // Change it to UNIX format
+            $fileDate = DateTime::createFromFormat('m-d-Y', $datePart)->getTimestamp();
+            // Check if it is the required CSV file             
+            if ($fileDate >= $startDate && $fileDate <= $endDate) {
                 // Copy the file to the destination path
                 $destinationFile = $destinationPath . '/' . $filename;
                 if(copy($csvFile, $destinationFile)){
-                    logMessage("Copied Master file: [$csvFile] into the working directory. \n");
+                    logMessage("Copied required CSV file: [$csvFile] into the working directory. \n");
                     // unlink (delete) the original file after copying
                     unlink($csvFile);
                 } else {
                     logMessage("Error: Required CSV file: [$csvFile] Not copied.\n");
                 }
-
             }
         }
+        // Move the master file
         if(copy($zipFile, ($destinationPath . '/' . basename($zipFile)))){
             logMessage("Copied Master file: [$zipFile] into the working directory. \n");
             unlink($zipFile); // unlink (delete) the original file after copying
