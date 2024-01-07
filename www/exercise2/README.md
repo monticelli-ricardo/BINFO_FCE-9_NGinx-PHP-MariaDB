@@ -2,16 +2,36 @@
 Part 1 - PHP terminal script that downloads and parses ALL required CSV files from the given URL and inserts all the data into the right DB tables. 
 Part 2 - Web application (accessible under "http://localhost:8080/exercise2") that then uses this DB to allow users sending information the following request to the DB: output the number of confirmed / recovered cases and deaths in a given time period (more than 1 day is possible) for an input-defined country/region (the entered country name should be considered as a substring of the given country name inside the data). 
   Make sure that user input data are validated and that no SQL injections are possible.
-
+----
 ## Exercise 2 - Procedure
 
 - Part 1 - Step 1 - Delete a Docker Compose stack.
     docker-compose -p docker_stack_name down
 
-- Part 1 - Step 2 - Update the Docker compose [nginx-php-mariadb] stack YAML file, to have a shared volume for the containers. 
+- Part 1 - Step 2 - Update and save the Docker compose [nginx-php-mariadb] stack YAML file, to have a shared volume for the containers. 
 	                  Include in each service (php, nginx, DB) under the "volume" section the line:
 	
-	  - ./shared_files:/shared_files  # Shared volume among containers 
+	  services:
+      nginx:
+        ... # same configuration
+        volumes:
+            - ./www:/var/www/html
+            - ./shared_files:/shared_files  # Shared volume among containers 
+
+      php:
+        ... # same configuration 
+        volumes:
+            - ./www:/var/www/html 
+            - ./shared_files:/shared_files  # Shared volume among containers
+
+      DB:
+        ... # same configuration 
+        volumes:
+            - ./dbdata:/var/lib/mysql
+            - ./shared_files:/shared_files  # Shared volume among containers
+        ... # same configuration 
+    
+    ... # same configuration 
 
 - Part 1 - Step 3 - Build up the docker compose stack
 	  docker-compose up -d
@@ -30,6 +50,11 @@ Part 2 - Web application (accessible under "http://localhost:8080/exercise2") th
 
 - Part 2 - Step 7 - Reach the web application COVID19 statistics http://localhost:8080/exercise2/exercise2.php 
 
+
+----
+### Optional - Read the exercise log files
+  - For the CSV extraction and insertion, check out the file: logFile.log
+  - For the Web Application, check out the file: webLogFile.log
 
 ### Optional - Grant privileges to the webprog DB user
     docker exec -it docker-nginx-php-mariadb-DB-1 mysql -h DB -u root -p   
