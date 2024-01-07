@@ -113,6 +113,8 @@
         logMessage('Merging completed. Master file created: ' . $master_file . "\n");
     }
 //-----------------------------------------------------------------------------------------------------------
+// Record the start time
+$startTime = microtime(true);
 // Merge CSV logic
 try {
 
@@ -125,4 +127,14 @@ try {
 } catch (Exception $e) {
     logMessage('Error: ' . $e->getMessage());
 }
+
+// Record the end time
+$endTime = microtime(true);
+
+// Calculate the execution time
+$executionTime = $endTime - $startTime;
+
+// Output the execution time
+logMessage("Script execution time: " . number_format($executionTime, 4) . " seconds\n");
+
 ?>

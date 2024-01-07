@@ -164,6 +164,9 @@
     }
 
 //-----------------------------------------------------------------------------------------------------------
+// Record the start time
+$startTime = microtime(true);
+
 // Insertion logic
 try {
     // Connect to the database
@@ -243,6 +246,16 @@ try {
 
 // Close the database connections
 $pdo = null;
+
+// Record the end time
+$endTime = microtime(true);
+
+// Calculate the execution time
+$executionTime = $endTime - $startTime;
+
+// Output the execution time
+logMessage("Script execution time: " . number_format($executionTime, 4) . " seconds\n");
+
 
 
 ?>
