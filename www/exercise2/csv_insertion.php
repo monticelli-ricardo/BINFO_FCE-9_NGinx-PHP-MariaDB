@@ -88,7 +88,7 @@
             $query = "CREATE TABLE IF NOT EXISTS $tableName (id INT PRIMARY KEY AUTO_INCREMENT, ";
 
             // Add columns to the query with inferred data types
-            foreach ($columns as $column) {
+            foreach ($csv_columns as $column) {
                 $dataType = inferDataType($column);  // Function to infer data type
                 $query .= "`$column` $dataType, ";  // Use backticks for column names
             }
@@ -104,6 +104,21 @@
             try {
                 if ($stmtCreateTable->execute()) {
                     logMessage("Table $tableName created successfully.\n");
+                    // Query to show columns from the existing table
+                    $queryShowColumns = "SHOW COLUMNS FROM $tableName";
+                    
+                    // Execute the query to get columns
+                    $stmtShowColumns = $pdo->prepare($queryShowColumns);
+                    $stmtShowColumns->execute();
+
+                    // Fetch the result and log each column
+                    $columnsResult = $stmtShowColumns->fetchAll(PDO::FETCH_ASSOC);
+                    logMessage("Columns for $tableName:\n");
+
+                    foreach ($columnsResult as $column) {
+                        $columnName = $column['Field'];
+                        logMessage(" - $columnName\n");
+                    }
                 } else {
                     $errorInfo = $stmtCreateTable->errorInfo();
                     logMessage("Error creating table $tableName: " . $errorInfo[2] . "\n");
@@ -209,11 +224,11 @@ try {
 
             // Execute the statement
             if ($stmt->execute()) {
-                logMessage("Data from $csvFileName inserted into your_table_name successfully.\n");
+                logMessage("Row $rowNumber data from [$csvFileName] inserted into [$tableName] successfully.\n");
             } else {
                 // Log the detailed error information
                 $errorInfo = $stmt->errorInfo();
-                logMessage("Data from $csvFileName was NOT inserted into your_table_name successfully.\n");
+                logMessage("Row $rowNumber data from [$csvFileName] was NOT inserted into [$tableName] successfully.\n");
                 logMessage("PDO Error Code: {$errorInfo[0]}\n");
                 logMessage("Driver Error Code: {$errorInfo[1]}\n");
                 logMessage("Driver Error Message: {$errorInfo[2]}\n");
@@ -225,13 +240,23 @@ try {
         // Commit the transaction after all inserts for this file
         $pdo->commit();
     } else {
-        logMessage("File $csvFileName not found.\n");
+        logMessage("File [$csvFileName] not found.\n");
     }
 
     // Perform a textual dump of the database webprog
-    $sql_dump = "mysqldump -u $database_password -p $database_password $database_name > dump.sql";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
+    $sql_dump = "mysqldump -u $database_password -p $database_password $database_name > /shared_files/ex2_dump.sql";
+    $stmt = $pdo->prepare($sql_dump);
+    // Execute the statement
+    if ($stmt->execute()) {
+        logMessage("Textual dump complete. Result are here: /shared_files/ex2_dump.sql .\n");
+    } else {
+        // Log the detailed error information
+        $errorInfo = $stmt->errorInfo();
+        logMessage("Textual dump failed.\n");
+        logMessage("PDO Error Code: {$errorInfo[0]}\n");
+        logMessage("Driver Error Code: {$errorInfo[1]}\n");
+        logMessage("Driver Error Message: {$errorInfo[2]}\n");
+    }
 
 } catch (PDOException $e) {
     // Roll back the transaction in case of an exception
