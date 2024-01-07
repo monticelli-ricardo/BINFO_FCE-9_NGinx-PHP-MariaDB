@@ -1,6 +1,7 @@
 # Exercise 2 - COVID-19 data analysis:
-Part 1 - PHP terminal script that downloads and parses ALL required CSV files from the given URL and inserts all the data into the right DB tables.
-Part 2 - Web application (accessible under "http://localhost:8080/exercise2") that then uses this DB to allow users sending information the following request to the DB: output the number of confirmed / recovered cases and deaths in a given time period (more than 1 day is possible) for an input-defined country/region (the entered country name should be considered as a substring of the given country name inside the data). Make sure that user input data are validated and that no SQL injections are possible.
+- Part 1 - PHP terminal script that downloads and parses ALL required CSV files from the given URL and inserts all the data into the right DB tables.
+
+- Part 2 - Web application (accessible under "http://localhost:8080/exercise2") that then uses this DB to allow users sending information the following request to the DB: output the number of confirmed / recovered cases and deaths in a given time period (more than 1 day is possible) for an input-defined country/region (the entered country name should be considered as a substring of the given country name inside the data). Make sure that user input data are validated and that no SQL injections are possible.
 ----
 ## Exercise 2 - Procedure
 
